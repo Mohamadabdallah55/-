@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameItem, BanPickStatus, Team, CategoryInfo } from '../types';
+import { DEFAULT_GAMES } from '../data/defaultGames';
 import { GameIcon } from './GameIcons';
 import { sound } from '../utils/audio';
 import {
@@ -22,6 +23,7 @@ import {
   BookOpen,
   Scale,
   Crown,
+  Swords,
 } from 'lucide-react';
 import { GameRulesModal } from './GameRulesModal';
 
@@ -115,9 +117,9 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
       glowColor: 'rgba(249, 115, 22, 0.5)',
     },
     {
-      catId: 'captains',
-      label: 'CAPTAINS',
-      subLabel: 'تحدي الكباتن',
+      catId: '1v1',
+      label: '1V1',
+      subLabel: '1 ضد 1',
       headerColor: '#EF4444',
       glowColor: 'rgba(239, 68, 68, 0.6)',
       isCaptains: true,
@@ -292,17 +294,36 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
       <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 my-auto max-w-7xl mx-auto w-full">
         {arenaColumns.map((col) => {
           // Resolve games for this column
-          const configuredKeys = columnGamesMap[col.catId] || DEFAULT_ARENA_COLUMN_GAMES[col.catId] || [];
-          
+          let configuredKeys =
+            columnGamesMap[col.catId] ||
+            DEFAULT_ARENA_COLUMN_GAMES[col.catId] ||
+            [];
+
+          // Guarantee that 1v1 always has the 3 1v1 games if missing, incomplete, or contains old box-of-liars
+          if (
+            col.catId === '1v1' &&
+            (!configuredKeys ||
+              configuredKeys.length < 3 ||
+              configuredKeys.includes('g-box-of-liars') ||
+              !configuredKeys.includes('g-fatal-fury'))
+          ) {
+            configuredKeys = DEFAULT_ARENA_COLUMN_GAMES['1v1'];
+          }
+
+          if (col.catId === 'fan_vote' && (!configuredKeys || configuredKeys.length < 3)) {
+            configuredKeys = DEFAULT_ARENA_COLUMN_GAMES['fan_vote'];
+          }
+
           let colGames = configuredKeys
-            .map((k) => games.find((g) => g.id === k))
+            .map((k) => games.find((g) => g.id === k) || DEFAULT_GAMES.find((g) => g.id === k))
             .filter(Boolean) as GameItem[];
 
-          // Fallback if games were deleted or missing
-          const targetCount = col.catId === 'captains' ? 2 : 3;
-          if (colGames.length < targetCount) {
-            const fallbackPool = games.filter((g) => g.categoryId === col.catId || col.isFanVote);
-            const extra = fallbackPool.filter((g) => !colGames.some((cg) => cg.id === g.id)).slice(0, targetCount - colGames.length);
+          // All columns MUST have exactly 3 games
+          if (colGames.length < 3) {
+            const fallbackPool = DEFAULT_GAMES.filter((g) => g.categoryId === col.catId);
+            const extra = fallbackPool
+              .filter((g) => !colGames.some((cg) => cg.id === g.id))
+              .slice(0, 3 - colGames.length);
             colGames = [...colGames, ...extra];
           }
 
@@ -319,7 +340,7 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
                 }}
               >
                 <div className="flex items-center justify-center gap-1">
-                  {col.isCaptains && <Crown className="w-3.5 h-3.5 text-rose-400" />}
+                  {col.isCaptains && <Swords className="w-3.5 h-3.5 text-rose-400" />}
                   {col.isFanVote && <Flame className="w-3.5 h-3.5 text-pink-400 fill-pink-400" />}
                   <span>{col.label}</span>
                 </div>

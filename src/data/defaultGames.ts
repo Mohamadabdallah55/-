@@ -80,13 +80,13 @@ export const CATEGORIES: CategoryInfo[] = [
     icon: 'activity',
   },
   {
-    id: 'captains',
-    nameAr: 'تحدي الكباتن',
-    nameEn: 'CAPTAINS',
-    description: 'مواجهات الحسم الخاصة بكباتن الفرق',
-    accentColor: '#EF4444', // Crimson / Red (matching image)
+    id: '1v1',
+    nameAr: '1 ضد 1',
+    nameEn: '1V1',
+    description: 'مواجهة فردية مباشرة بين كباتن الفرق',
+    accentColor: '#EF4444', // Crimson / Red
     glowColor: 'rgba(239, 68, 68, 0.4)',
-    icon: 'crown',
+    icon: 'swords',
   },
   {
     id: 'fan_vote',
@@ -266,10 +266,36 @@ export const DEFAULT_GAMES: GameItem[] = [
     iconType: 'bottle',
   },
 
-  // 4. تحدي الكباتن (CAPTAINS CHALLENGE)
+  // 4. مواجهة 1 ضد 1 (1V1)
+  {
+    id: 'g-fatal-fury',
+    categoryId: '1v1',
+    nameAr: 'فاتال فيوري',
+    nameEn: 'FATAL FURY',
+    description: 'مواجهة قتالية مشتعلة 1 ضد 1 وجهاً لوجه',
+    iconType: 'fighter',
+  },
+  {
+    id: 'g-throw-challenge',
+    categoryId: '1v1',
+    nameAr: 'تحدي الرمي (أكياس الرمل)',
+    nameEn: 'CORNHOLE TOSS',
+    description: 'رمي الأكياس بدقة نحو فتحة اللوح المائل',
+    iconType: 'sack',
+  },
+  {
+    id: 'g-fc27-1v1',
+    categoryId: '1v1',
+    nameAr: 'إف سي 27 (1 ضد 1)',
+    nameEn: 'EA FC 27 1V1',
+    description: 'مباراة شوط واحد ذهبي بين ممثلَي الفريقين',
+    iconType: 'fc27',
+  },
+
+  // 5. تصويت الجمهور (FAN VOTE)
   {
     id: 'g-box-of-liars',
-    categoryId: 'captains',
+    categoryId: 'fan_vote',
     nameAr: 'صندوق الكذابين',
     nameEn: 'BOX OF LIARS',
     description: 'وصف ما بداخل الصندوق واكتشاف إن كان يصدق أم يراوغ',
@@ -277,14 +303,12 @@ export const DEFAULT_GAMES: GameItem[] = [
   },
   {
     id: 'g-stop-timer',
-    categoryId: 'captains',
+    categoryId: 'fan_vote',
     nameAr: 'وقف المؤقت',
     nameEn: 'STOP THE TIMER',
     description: 'إيقاف ساعة التوقيت بدقة متناهية دون النظر للشاشة',
     iconType: 'timer',
   },
-
-  // 5. تصويت الجمهور (FAN VOTE)
   {
     id: 'g-fan-vote',
     categoryId: 'fan_vote',

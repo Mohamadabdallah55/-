@@ -1,7 +1,7 @@
 import React from 'react';
 import { CategoryInfo, CategoryKey } from '../types';
 import { GameIcon } from './GameIcons';
-import { Check, Crown, Flame } from 'lucide-react';
+import { Check, Crown, Flame, Swords } from 'lucide-react';
 
 interface CategoryPickerProps {
   categories: CategoryInfo[];
@@ -25,7 +25,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             </span>
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            تشمل فئات المواجهة: إلكتروني، ذكاء، بدني، تحدي الكباتن، و<strong className="text-pink-400">تصويت الجمهور</strong> (متاح كامل المكتبة).
+            تشمل فئات المواجهة: إلكتروني، ذكاء، بدني، <strong className="text-rose-400">تحدي الكباتن (1 ضد 1)</strong>، و<strong className="text-pink-400">تصويت الجمهور</strong> (متاح كامل المكتبة).
           </p>
         </div>
       </div>
@@ -41,7 +41,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
               onClick={() => onToggleCategory(cat.id)}
               className={`relative p-3.5 rounded-xl border text-right transition-all group flex flex-col justify-between min-h-[105px] ${
                 isSelected
-                  ? cat.id === 'captains'
+                  ? cat.id === '1v1' || cat.id === 'captains'
                     ? 'bg-rose-950/40 border-rose-500 shadow-md shadow-rose-500/20 ring-1 ring-rose-400'
                     : cat.id === 'fan_vote'
                     ? 'bg-pink-950/40 border-pink-500 shadow-md shadow-pink-500/20 ring-1 ring-pink-400'
@@ -58,8 +58,8 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
                     color: cat.accentColor,
                   }}
                 >
-                  {cat.id === 'captains' ? (
-                    <Crown className="w-4 h-4 text-rose-400" />
+                  {cat.id === '1v1' || cat.id === 'captains' ? (
+                    <Swords className="w-4 h-4 text-rose-400" />
                   ) : cat.id === 'fan_vote' ? (
                     <Flame className="w-4 h-4 text-pink-400 fill-pink-400" />
                   ) : (
@@ -70,7 +70,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
                 <div
                   className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${
                     isSelected
-                      ? cat.id === 'captains'
+                      ? cat.id === '1v1' || cat.id === 'captains'
                         ? 'bg-rose-600 text-white'
                         : cat.id === 'fan_vote'
                         ? 'bg-pink-600 text-white'

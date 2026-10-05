@@ -29,7 +29,7 @@ export const GamesLibraryMap: React.FC<GamesLibraryMapProps> = ({
   const digitalGames = games.filter((g) => g.categoryId === 'digital');
   const mentalGames = games.filter((g) => g.categoryId === 'mental');
   const physicalGames = games.filter((g) => g.categoryId === 'physical');
-  const captainsGames = games.filter((g) => g.categoryId === 'captains');
+  const captainsGames = games.filter((g) => g.categoryId === '1v1' || g.categoryId === 'captains');
   const fanVoteGames = games.filter((g) => g.categoryId === 'fan_vote');
 
   const handleBadgeClick = (game: GameItem) => {
@@ -195,14 +195,14 @@ export const GamesLibraryMap: React.FC<GamesLibraryMapProps> = ({
 
       {/* 4 & 5. تحدي الكباتن وتصويت الجمهور (BOTTOM PODS) */}
       <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-        {/* 4. تحدي الكباتن (CAPTAINS CHALLENGE) */}
+        {/* 4. 1 ضد 1 (1V1) */}
         <div className="flex flex-col items-center p-4 rounded-3xl bg-slate-900/40 border border-rose-900/50 shadow-inner">
           <div className="px-6 py-2 rounded-full border-2 border-rose-500/80 bg-gradient-to-r from-rose-950/70 via-red-950/70 to-rose-950/70 shadow-[0_0_35px_rgba(239,68,68,0.45)] mb-4 text-center">
             <span className="text-base sm:text-lg font-black font-changa text-white">
-              تحدي الكباتن (CAPTAINS)
+              1 ضد 1 (1V1)
             </span>
             <span className="text-[10px] font-orbitron text-rose-300 block tracking-wider uppercase font-bold">
-              مواجهات الحسم الخاصة بكباتن الفرق
+              مواجهات فردية مباشرة بين ممثلي الفريقين
             </span>
           </div>
 

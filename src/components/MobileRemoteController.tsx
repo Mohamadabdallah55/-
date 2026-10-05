@@ -15,6 +15,7 @@ import {
   DEFAULT_ARENA_COLUMN_GAMES,
   saveArenaColumnGames,
 } from '../utils/storage';
+import { DEFAULT_GAMES } from '../data/defaultGames';
 import {
   Smartphone,
   Trophy,
@@ -89,10 +90,36 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   const activeGame = games.find((g) => g.id === currentMatch.activeGameId);
 
   // Column games for the currently selected category
-  const activeColGameIds = arenaColumnGames[selectedCategory] || [];
-  const currentCategoryGames = activeColGameIds
-    .map((gId) => games.find((g) => g.id === gId))
+  let activeColGameIds =
+    arenaColumnGames[selectedCategory] ||
+    DEFAULT_ARENA_COLUMN_GAMES[selectedCategory] ||
+    [];
+
+  if (
+    selectedCategory === '1v1' &&
+    (!activeColGameIds ||
+      activeColGameIds.length < 3 ||
+      activeColGameIds.includes('g-box-of-liars') ||
+      !activeColGameIds.includes('g-fatal-fury'))
+  ) {
+    activeColGameIds = DEFAULT_ARENA_COLUMN_GAMES['1v1'];
+  }
+
+  if (selectedCategory === 'fan_vote' && (!activeColGameIds || activeColGameIds.length < 3)) {
+    activeColGameIds = DEFAULT_ARENA_COLUMN_GAMES['fan_vote'];
+  }
+
+  let currentCategoryGames = activeColGameIds
+    .map((gId) => games.find((g) => g.id === gId) || DEFAULT_GAMES.find((g) => g.id === gId))
     .filter(Boolean) as GameItem[];
+
+  if (currentCategoryGames.length < 3) {
+    const fallback = DEFAULT_GAMES.filter((g) => g.categoryId === selectedCategory);
+    const extra = fallback
+      .filter((g) => !currentCategoryGames.some((cg) => cg.id === g.id))
+      .slice(0, 3 - currentCategoryGames.length);
+    currentCategoryGames = [...currentCategoryGames, ...extra];
+  }
 
   // Spare games from this category (for swapping)
   const categorySpareGames = games.filter(

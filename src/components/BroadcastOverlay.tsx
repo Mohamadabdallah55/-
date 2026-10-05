@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CurrentMatch, Team, GameItem, LeagueRow, CategoryInfo, BanPickStatus } from '../types';
+import { DEFAULT_GAMES } from '../data/defaultGames';
 import { GameIcon } from './GameIcons';
 import { subscribeToBroadcast, DEFAULT_ARENA_COLUMN_GAMES } from '../utils/storage';
 import {
@@ -93,8 +94,8 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
       glowColor: 'rgba(249, 115, 22, 0.5)',
     },
     {
-      catId: 'captains',
-      label: 'CAPTAINS',
+      catId: '1v1',
+      label: '1V1',
       subLabel: 'تحدي الكباتن',
       headerColor: '#EF4444',
       glowColor: 'rgba(239, 68, 68, 0.6)',
@@ -279,10 +280,36 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
         <div className="my-auto max-w-7xl mx-auto w-full py-2 animate-fade-in">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {arenaColumns.map((col) => {
-              const configuredKeys = arenaColumnGames[col.catId] || DEFAULT_ARENA_COLUMN_GAMES[col.catId] || [];
-              const colGames = configuredKeys
-                .map((key) => games.find((g) => g.id === key))
+              let configuredKeys =
+                arenaColumnGames[col.catId] ||
+                DEFAULT_ARENA_COLUMN_GAMES[col.catId] ||
+                [];
+
+              if (
+                col.catId === '1v1' &&
+                (!configuredKeys ||
+                  configuredKeys.length < 3 ||
+                  configuredKeys.includes('g-box-of-liars') ||
+                  !configuredKeys.includes('g-fatal-fury'))
+              ) {
+                configuredKeys = DEFAULT_ARENA_COLUMN_GAMES['1v1'];
+              }
+
+              if (col.catId === 'fan_vote' && (!configuredKeys || configuredKeys.length < 3)) {
+                configuredKeys = DEFAULT_ARENA_COLUMN_GAMES['fan_vote'];
+              }
+
+              let colGames = configuredKeys
+                .map((key) => games.find((g) => g.id === key) || DEFAULT_GAMES.find((g) => g.id === key))
                 .filter(Boolean) as GameItem[];
+
+              if (colGames.length < 3) {
+                const fallbackPool = DEFAULT_GAMES.filter((g) => g.categoryId === col.catId);
+                const extra = fallbackPool
+                  .filter((g) => !colGames.some((cg) => cg.id === g.id))
+                  .slice(0, 3 - colGames.length);
+                colGames = [...colGames, ...extra];
+              }
 
               return (
                 <div

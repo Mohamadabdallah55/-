@@ -181,11 +181,20 @@ export function loadGames(): GameItem[] {
     const raw = localStorage.getItem(STORAGE_KEYS.GAMES);
     if (raw) {
       const parsed: GameItem[] = JSON.parse(raw);
+      // Ensure all 3 1v1 games are present
+      const hasAll1v1 =
+        parsed.some((g) => g.id === 'g-fatal-fury') &&
+        parsed.some((g) => g.id === 'g-throw-challenge') &&
+        parsed.some((g) => g.id === 'g-fc27-1v1');
       const hasOldGame = parsed.some((g) =>
-        ['g-tricky-towers', 'g-basketball', 'g-strength-tester', 'g-fatal-fury', 'g-crash-team-racing', 'g-throw-challenge'].includes(g.id)
+        ['g-tricky-towers', 'g-basketball', 'g-strength-tester', 'g-crash-team-racing'].includes(g.id)
       );
-      if (!hasOldGame && parsed.length > 0) return parsed;
+      if (hasAll1v1 && !hasOldGame && parsed.length >= 22) {
+        return parsed;
+      }
     }
+  } catch {}
+  try {
     localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(DEFAULT_GAMES));
   } catch {}
   return DEFAULT_GAMES;
@@ -198,14 +207,16 @@ export function saveGames(games: GameItem[]) {
   } catch {}
 }
 
-// Selected categories for match
+// Selected categories for match (5 categories)
 export function loadSelectedCategories(): CategoryKey[] {
-  const allCategories: CategoryKey[] = ['digital', 'mental', 'physical', 'captains', 'fan_vote'];
+  const allCategories: CategoryKey[] = ['digital', 'mental', 'physical', '1v1', 'fan_vote'];
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SELECTED_CATEGORIES);
     if (raw) {
       const parsed: CategoryKey[] = JSON.parse(raw);
-      const filtered = parsed.filter((c) => allCategories.includes(c as CategoryKey));
+      // Migrate legacy 'captains' to '1v1'
+      const migrated = parsed.map((c) => (c === 'captains' ? '1v1' : c));
+      const filtered = migrated.filter((c) => allCategories.includes(c as CategoryKey));
       const unique = Array.from(new Set(filtered)) as CategoryKey[];
       if (unique.length >= 3) return unique;
     }
@@ -378,8 +389,9 @@ export const DEFAULT_ARENA_COLUMN_GAMES: Record<string, string[]> = {
   digital: ['g-fc27', 'g-rocket-league', 'g-clash-royale'],
   mental: ['g-shans', 'g-photo-match', 'g-letters-game'],
   physical: ['g-penalty-shoot', 'g-football-2v2', 'g-bottle-flip-xo'],
-  captains: ['g-box-of-liars', 'g-stop-timer'],
-  fan_vote: ['g-fan-vote', 'g-brawlhalla', 'g-codenames'],
+  '1v1': ['g-fatal-fury', 'g-throw-challenge', 'g-fc27-1v1'],
+  captains: ['g-fatal-fury', 'g-throw-challenge', 'g-fc27-1v1'],
+  fan_vote: ['g-box-of-liars', 'g-stop-timer', 'g-fan-vote'],
 };
 
 export function loadArenaColumnGames(): Record<string, string[]> {
@@ -387,19 +399,24 @@ export function loadArenaColumnGames(): Record<string, string[]> {
     const raw = localStorage.getItem(STORAGE_KEYS.ARENA_COLUMN_GAMES);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Clean check: if contains old deleted games or missing captains/fan_vote
-      const rawStr = JSON.stringify(parsed);
+      // Clean check: if each of the 5 categories has exactly 3 games
+      const v1v1 = parsed['1v1'] || parsed.captains;
+      const is1v1Valid = v1v1 && v1v1.length === 3 && v1v1.includes('g-fatal-fury');
+      const isFanVoteValid = parsed.fan_vote && parsed.fan_vote.length === 3;
       if (
-        !rawStr.includes('g-tricky-towers') &&
-        !rawStr.includes('g-basketball') &&
-        !rawStr.includes('g-fatal-fury') &&
-        parsed.captains &&
-        parsed.fan_vote
+        parsed.digital?.length === 3 &&
+        parsed.mental?.length === 3 &&
+        parsed.physical?.length === 3 &&
+        is1v1Valid &&
+        isFanVoteValid &&
+        !JSON.stringify(parsed).includes('g-tricky-towers')
       ) {
+        parsed['1v1'] = v1v1;
         return parsed;
       }
     }
   } catch {}
+  localStorage.setItem(STORAGE_KEYS.ARENA_COLUMN_GAMES, JSON.stringify(DEFAULT_ARENA_COLUMN_GAMES));
   return DEFAULT_ARENA_COLUMN_GAMES;
 }
 
