@@ -42,11 +42,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   const [targetSeconds, setTargetSeconds] = useState<number>(10);
   const [isBlindChallenge, setIsBlindChallenge] = useState<boolean>(true);
 
-  // Shared Stopwatch State
-  const [stopwatchMs, setStopwatchMs] = useState<number>(0);
-  const [stopwatchActive, setStopwatchActive] = useState<boolean>(false);
-
-  // Independent Team Stopwatch States (Big Tap-to-Start / Tap-to-Stop)
+  // Independent Team Stopwatch States (Big Tap-to-Start / Tap-to-Stop for Stop The Timer Challenge)
   const [teamAMs, setTeamAMs] = useState<number>(0);
   const [teamAActive, setTeamAActive] = useState<boolean>(false);
   const [teamAFinished, setTeamAFinished] = useState<boolean>(false);
@@ -55,43 +51,47 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   const [teamBActive, setTeamBActive] = useState<boolean>(false);
   const [teamBFinished, setTeamBFinished] = useState<boolean>(false);
 
-  // Interval for Team A
+  // High performance refs for smooth, non-blocking time updates
+  const teamAStartRef = useRef<number>(0);
+  const teamBStartRef = useRef<number>(0);
+
+  // Interval for Team A (50ms interval = lightweight 20fps without UI freeze)
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (teamAActive) {
-      const startTime = Date.now() - teamAMs;
+      teamAStartRef.current = Date.now() - teamAMs;
       interval = setInterval(() => {
-        setTeamAMs(Date.now() - startTime);
-      }, 33);
+        setTeamAMs(Date.now() - teamAStartRef.current);
+      }, 50);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [teamAActive, teamAMs]);
+  }, [teamAActive]);
 
   // Interval for Team B
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (teamBActive) {
-      const startTime = Date.now() - teamBMs;
+      teamBStartRef.current = Date.now() - teamBMs;
       interval = setInterval(() => {
-        setTeamBMs(Date.now() - startTime);
-      }, 33);
+        setTeamBMs(Date.now() - teamBStartRef.current);
+      }, 50);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [teamBActive, teamBMs]);
+  }, [teamBActive]);
 
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [expandedTimer, setExpandedTimer] = useState<'none' | 'countdown' | 'stopwatch'>('none');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Countdown Interval Ref
+  // Countdown Interval Ref (clean, does NOT trigger on countdownLeft)
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    if (countdownActive && countdownLeft > 0) {
+    if (countdownActive) {
       interval = setInterval(() => {
         setCountdownLeft((prev) => {
           if (prev <= 1) {
@@ -112,38 +112,13 @@ export const DualTimer: React.FC<DualTimerProps> = ({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [countdownActive, countdownLeft, soundEnabled]);
-
-  // Stopwatch Interval Ref
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (stopwatchActive) {
-      const startTime = Date.now() - stopwatchMs;
-      interval = setInterval(() => {
-        setStopwatchMs(Date.now() - startTime);
-      }, 33); // ~30 fps update for crisp centiseconds
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [stopwatchActive, stopwatchMs]);
+  }, [countdownActive, soundEnabled]);
 
   // Format countdown mm:ss
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  };
-
-  // Format stopwatch mm:ss.cc
-  const formatStopwatch = (ms: number) => {
-    const mins = Math.floor(ms / 60000);
-    const secs = Math.floor((ms % 60000) / 1000);
-    const centis = Math.floor((ms % 1000) / 10);
-    return {
-      main: `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`,
-      sub: `.${String(centis).padStart(2, '0')}`,
-    };
   };
 
   // Team Stopwatch Handlers (Tap to start / Tap to finish)
@@ -215,6 +190,27 @@ export const DualTimer: React.FC<DualTimerProps> = ({
     setTeamBMs(0);
   };
 
+  // Stable ref for keyboard events to prevent re-attaching listeners and frame drops
+  const duelStateRef = useRef({
+    expandedTimer,
+    teamAActive,
+    teamBActive,
+    handleToggleTeamA,
+    handleToggleTeamB,
+    startBothSimultaneously,
+    setExpandedTimer,
+  });
+
+  duelStateRef.current = {
+    expandedTimer,
+    teamAActive,
+    teamBActive,
+    handleToggleTeamA,
+    handleToggleTeamB,
+    startBothSimultaneously,
+    setExpandedTimer,
+  };
+
   // Keyboard Dual Battle Listeners (Team A = 'A', Team B = 'L' or 'Enter', ESC = close fullscreen)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -224,37 +220,37 @@ export const DualTimer: React.FC<DualTimerProps> = ({
         return;
       }
 
-      if (e.key === 'Escape' && expandedTimer !== 'none') {
-        setExpandedTimer('none');
+      if (e.key === 'Escape' && duelStateRef.current.expandedTimer !== 'none') {
+        duelStateRef.current.setExpandedTimer('none');
         return;
       }
 
       // Team A Duel Key: 'A', 'a', Arabic 'ش'
       if (e.key === 'a' || e.key === 'A' || e.key === 'ش') {
         e.preventDefault();
-        handleToggleTeamA();
+        duelStateRef.current.handleToggleTeamA();
         return;
       }
 
       // Team B Duel Key: 'l', 'L', Arabic 'م', or 'Enter'
       if (e.key === 'l' || e.key === 'L' || e.key === 'م' || e.key === 'Enter') {
         e.preventDefault();
-        handleToggleTeamB();
+        duelStateRef.current.handleToggleTeamB();
         return;
       }
 
       // Space Key: start both together if neither is running
       if (e.code === 'Space') {
-        if (!teamAActive && !teamBActive) {
+        if (!duelStateRef.current.teamAActive && !duelStateRef.current.teamBActive) {
           e.preventDefault();
-          startBothSimultaneously();
+          duelStateRef.current.startBothSimultaneously();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [expandedTimer, teamAActive, teamAFinished, teamBActive, teamBFinished]);
+  }, []);
 
   // Target Time & Accuracy Calculations (من الأقرب للثواني المستهدفة)
   const teamASecs = teamAMs / 1000;
@@ -283,16 +279,16 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   };
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen?.();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen?.();
-      setIsFullscreen(false);
-    }
+    try {
+      if (!document.fullscreenElement) {
+        containerRef.current?.requestFullscreen?.().catch(() => {});
+        setIsFullscreen(true);
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+        setIsFullscreen(false);
+      }
+    } catch {}
   };
-
-  const swFormatted = formatStopwatch(stopwatchMs);
 
   return (
     <div
@@ -495,37 +491,31 @@ export const DualTimer: React.FC<DualTimerProps> = ({
           </div>
         </div>
 
-        {/* 2. STOPWATCH / COUNT-UP CARD */}
+        {/* 2. STOP THE TIMER CHALLENGE CARD */}
         <div className="bg-[#0C1226]/90 border border-slate-800/90 rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 text-cyan-400">
-              <Clock className="w-6 h-6" />
-              <h2 className="text-lg font-bold font-changa text-white">
-                ساعة الإيقاف التصاعدية (Stopwatch)
-              </h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                <Target className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold font-changa text-white">
+                  تحدي وقف المؤقت (Stop The Timer)
+                </h2>
+                <p className="text-[11px] text-slate-400 font-changa">
+                  تحدي الوصول للثواني المستهدفة وإيقاف العداد بالرأس
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setExpandedTimer('stopwatch')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/50 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-200 text-xs font-bold transition-all shadow-sm active:scale-95"
-                title="تكبير شاشة ساعة الإيقاف على كامل الشاشة"
+                title="تكبير شاشة التحدي على كامل الشاشة"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
                 <span>تكبير الشاشة</span>
               </button>
-              <span className="text-xs text-slate-400 font-mono hidden sm:inline">دقة أجزاء الثانية</span>
-            </div>
-          </div>
-
-          {/* Big Digital Display with centiseconds */}
-          <div className="my-6 text-center">
-            <div className="bg-[#050814] border-2 border-cyan-900/60 text-cyan-300 py-6 px-4 rounded-3xl shadow-[0_0_40px_rgba(6,182,212,0.25)] flex items-baseline justify-center font-orbitron font-black">
-              <span className="text-6xl sm:text-8xl md:text-9xl tracking-wider">
-                {swFormatted.main}
-              </span>
-              <span className="text-3xl sm:text-5xl md:text-6xl text-cyan-400/70 ml-1">
-                {swFormatted.sub}
-              </span>
             </div>
           </div>
 
@@ -860,46 +850,6 @@ export const DualTimer: React.FC<DualTimerProps> = ({
             </div>
           </div>
 
-          {/* Large Field Controls for Stopwatch */}
-          <div className="flex items-center gap-3">
-            {/* Start / Pause */}
-            <button
-              onClick={() => {
-                sound.playTick();
-                setStopwatchActive(!stopwatchActive);
-              }}
-              className={`flex-1 py-4 sm:py-5 px-6 rounded-2xl font-bold font-changa text-lg sm:text-xl flex items-center justify-center gap-3 transition-all shadow-xl active:scale-95 ${
-                stopwatchActive
-                  ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
-                  : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-cyan-600/40'
-              }`}
-            >
-              {stopwatchActive ? (
-                <>
-                  <Pause className="w-6 h-6 fill-white" />
-                  <span>إيقاف الساعة</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-6 h-6 fill-white" />
-                  <span>بدء ساعة الإيقاف</span>
-                </>
-              )}
-            </button>
-
-            {/* Reset */}
-            <button
-              onClick={() => {
-                sound.playTick();
-                setStopwatchActive(false);
-                setStopwatchMs(0);
-              }}
-              className="py-4 sm:py-5 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 transition-colors"
-              title="تصفير ساعة الإيقاف"
-            >
-              <RotateCcw className="w-6 h-6" />
-            </button>
-          </div>
         </div>
 
       </div>
@@ -951,33 +901,22 @@ export const DualTimer: React.FC<DualTimerProps> = ({
           </div>
 
           {/* Central Mega Digits Display */}
-          <div className="flex-1 flex flex-col items-center justify-center my-4 sm:my-8 relative">
-            {/* Ambient Background Stadium Glow */}
+          <div className="flex-1 flex flex-col items-center justify-center my-auto py-6 relative">
             <div
-              className={`absolute inset-0 max-w-4xl mx-auto rounded-full blur-3xl opacity-30 pointer-events-none transition-colors ${
+              className={`w-full max-w-5xl py-8 sm:py-12 px-6 rounded-3xl border-2 transition-colors text-center flex flex-col items-center justify-center ${
                 countdownLeft <= 5 && countdownLeft > 0
-                  ? 'bg-rose-600'
+                  ? 'bg-rose-950/70 border-rose-500 text-rose-300 shadow-[0_0_50px_rgba(244,63,94,0.4)] animate-pulse'
                   : countdownLeft === 0
-                  ? 'bg-red-600'
-                  : 'bg-purple-600'
-              }`}
-            />
-
-            <div
-              className={`relative z-10 w-full max-w-5xl py-8 sm:py-14 px-6 rounded-3xl border-4 transition-all text-center flex flex-col items-center justify-center ${
-                countdownLeft <= 5 && countdownLeft > 0
-                  ? 'bg-rose-950/60 border-rose-500 text-rose-300 shadow-[0_0_90px_rgba(244,63,94,0.6)] animate-pulse'
-                  : countdownLeft === 0
-                  ? 'bg-red-950/70 border-red-500 text-red-500 shadow-[0_0_100px_rgba(239,68,68,0.7)]'
-                  : 'bg-[#060818]/90 border-purple-600/70 text-purple-100 shadow-[0_0_80px_rgba(168,85,247,0.35)]'
+                  ? 'bg-red-950/80 border-red-500 text-red-500 shadow-[0_0_60px_rgba(239,68,68,0.5)]'
+                  : 'bg-[#060818] border-purple-600/70 text-purple-100 shadow-[0_0_50px_rgba(168,85,247,0.25)]'
               }`}
             >
-              <span className="font-orbitron font-black text-[20vw] sm:text-[16vw] md:text-[14vw] leading-none tracking-wider drop-shadow-2xl">
+              <span className="font-orbitron font-black text-7xl sm:text-9xl md:text-[12rem] lg:text-[14rem] leading-none tracking-wider select-none">
                 {formatCountdown(countdownLeft)}
               </span>
 
               {countdownLeft === 0 && (
-                <div className="mt-4 text-red-400 font-black font-changa text-2xl sm:text-4xl animate-bounce tracking-wide drop-shadow-md">
+                <div className="mt-4 text-red-400 font-black font-changa text-2xl sm:text-4xl animate-bounce tracking-wide">
                   انتهى الوقت! (TIME OUT)
                 </div>
               )}
@@ -1078,18 +1017,18 @@ export const DualTimer: React.FC<DualTimerProps> = ({
           {/* Top Bar */}
           <div className="flex items-center justify-between border-b border-cyan-900/40 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-600 flex items-center justify-center font-bold text-white shadow-lg shadow-cyan-600/40">
-                <Clock className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-xl bg-amber-500/30 border border-amber-500/50 flex items-center justify-center font-bold text-white shadow-lg">
+                <Target className="w-6 h-6 text-amber-400" />
               </div>
               <div>
                 <h2 className="text-xl sm:text-2xl font-black font-changa text-white flex items-center gap-2">
-                  <span>ساعة الإيقاف الميدانية العملاقة (Stopwatch)</span>
+                  <span>تحدي وقف المؤقت الميداني (Stop The Timer)</span>
                   <span className="text-xs font-orbitron px-2 py-0.5 rounded-full bg-cyan-900/60 border border-cyan-500/50 text-cyan-300">
-                    FULLSCREEN ARENA
+                    ARENA DUEL
                   </span>
                 </h2>
                 <p className="text-xs text-cyan-300/80 font-changa">
-                  دقة أجزاء الثانية مع تسجيل زمن إنجاز الفرق المتواجهة
+                  تحدي الوصول للثواني المستهدفة وإيقاف العداد بالرأس
                 </p>
               </div>
             </div>
@@ -1106,22 +1045,8 @@ export const DualTimer: React.FC<DualTimerProps> = ({
             </div>
           </div>
 
-          {/* Central Mega Digits Display */}
-          <div className="flex-1 flex flex-col items-center justify-center my-4 sm:my-8 relative">
-            <div className="absolute inset-0 max-w-4xl mx-auto rounded-full blur-3xl bg-cyan-500/20 pointer-events-none" />
-
-            <div className="relative z-10 w-full max-w-5xl py-8 sm:py-14 px-6 rounded-3xl border-4 border-cyan-500/70 bg-[#040A1C]/90 text-cyan-200 shadow-[0_0_80px_rgba(6,182,212,0.4)] text-center flex items-baseline justify-center font-orbitron font-black">
-              <span className="text-[18vw] sm:text-[15vw] md:text-[13vw] leading-none tracking-wider drop-shadow-2xl">
-                {swFormatted.main}
-              </span>
-              <span className="text-[10vw] sm:text-[8vw] md:text-[7vw] text-cyan-400/75 ml-2 font-mono drop-shadow-lg">
-                {swFormatted.sub}
-              </span>
-            </div>
-          </div>
-
           {/* Split Team Records for Field Challenges (MEGA CIRCULAR BUZZER BUTTONS) */}
-          <div className="max-w-5xl mx-auto w-full space-y-4">
+          <div className="max-w-5xl mx-auto w-full my-auto space-y-4">
             {/* Target Settings Bar in Fullscreen */}
             <div className="p-3 sm:p-4 rounded-2xl bg-[#070B1E]/90 border border-cyan-500/40 flex flex-wrap items-center justify-between gap-3 shadow-lg">
               <div className="flex flex-wrap items-center gap-2.5">
@@ -1438,45 +1363,6 @@ export const DualTimer: React.FC<DualTimerProps> = ({
                   ⌨️ اضغط مفتاح [ L أو Enter ] للبدء/الإيقاف
                 </div>
               </div>
-            </div>
-
-            {/* Giant Action Buttons for Central Stopwatch */}
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => {
-                  sound.playTick();
-                  setStopwatchActive(!stopwatchActive);
-                }}
-                className={`flex-1 py-5 px-8 rounded-2xl font-black font-changa text-xl sm:text-2xl flex items-center justify-center gap-3 transition-all shadow-2xl active:scale-98 ${
-                  stopwatchActive
-                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/40'
-                    : 'bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-cyan-600/50'
-                }`}
-              >
-                {stopwatchActive ? (
-                  <>
-                    <Pause className="w-7 h-7 fill-slate-950" />
-                    <span>إيقاف الساعة</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-7 h-7 fill-white" />
-                    <span>بدء ساعة الإيقاف</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={() => {
-                  sound.playTick();
-                  setStopwatchActive(false);
-                  setStopwatchMs(0);
-                }}
-                className="py-5 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 border-2 border-slate-700 text-slate-300 transition-colors"
-                title="تصفير ساعة الإيقاف"
-              >
-                <RotateCcw className="w-7 h-7" />
-              </button>
             </div>
           </div>
         </div>

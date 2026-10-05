@@ -339,14 +339,12 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
                   boxShadow: `0 0 18px ${col.glowColor}`,
                 }}
               >
-                <div className="flex items-center justify-center gap-1">
+                <div className="flex items-center justify-center gap-1.5">
                   {col.isCaptains && <Swords className="w-3.5 h-3.5 text-rose-400" />}
                   {col.isFanVote && <Flame className="w-3.5 h-3.5 text-pink-400 fill-pink-400" />}
-                  <span>{col.label}</span>
+                  <span className="font-changa font-bold text-xs sm:text-sm text-white">{col.subLabel}</span>
+                  <span className="text-[9px] sm:text-[10px] font-orbitron text-slate-400 uppercase font-semibold">({col.label})</span>
                 </div>
-                <span className="block text-[9px] font-changa text-slate-400 font-normal">
-                  {col.subLabel}
-                </span>
               </div>
 
               {/* 3 Hexagonal Game Cards Stack */}
@@ -427,10 +425,17 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
                         )}
                       </div>
 
-                      {/* Game Label Below Card */}
-                      <span className="mt-2 text-[11px] sm:text-xs font-bold font-orbitron tracking-wider text-slate-200 text-center max-w-[120px] uppercase drop-shadow group-hover:text-white transition-colors line-clamp-1">
-                        {game.nameEn || game.nameAr}
-                      </span>
+                      {/* Game Label Below Card - Arabic Main Name */}
+                      <div className="mt-2 flex flex-col items-center text-center max-w-[130px] px-1">
+                        <span className="text-xs sm:text-sm font-bold font-changa text-white tracking-wide drop-shadow group-hover:text-indigo-200 transition-colors line-clamp-1">
+                          {game.nameAr}
+                        </span>
+                        {game.nameEn && (
+                          <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider line-clamp-1">
+                            {game.nameEn}
+                          </span>
+                        )}
+                      </div>
 
                       {/* ACTION BUTTONS: القوانين + تغيير اللعبة */}
                       <div className="flex items-center gap-1.5 mt-1.5">
