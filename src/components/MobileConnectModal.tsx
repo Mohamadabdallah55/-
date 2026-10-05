@@ -11,7 +11,9 @@ import {
   Settings,
   RefreshCw,
   Sparkles,
+  Wifi,
 } from 'lucide-react';
+import { webrtcSync } from '../utils/webrtcSync';
 
 interface MobileConnectModalProps {
   isOpen: boolean;
@@ -36,20 +38,32 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
   const [showDomainSettings, setShowDomainSettings] = useState(false);
   const [tempDomainInput, setTempDomainInput] = useState<string>('');
 
-  // Determine the effective base origin
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-  const effectiveBase = (customDomain && customDomain.trim() !== '')
-    ? customDomain.trim().replace(/\/+$/, '')
-    : currentOrigin;
+  const roomCode = webrtcSync.getRoomCode();
 
-  // Primary URL uses clean /remote path (which camera QR scanners handle best)
-  const remoteUrl = `${effectiveBase}/remote`;
+  // Determine the effective base origin and subpath (handles GitHub Pages repo paths e.g. /my-repo/)
+  const getFullBase = () => {
+    if (typeof window === 'undefined') return '';
+    if (customDomain && customDomain.trim() !== '') {
+      return customDomain.trim().replace(/\/+$/, '');
+    }
+    const origin = window.location.origin;
+    const pathname = window.location.pathname
+      .replace(/\/index\.html$/, '')
+      .replace(/\/remote\/?$/, '')
+      .replace(/\/+$/, '');
+    return `${origin}${pathname}`;
+  };
+
+  const effectiveBase = getFullBase();
+
+  // Universal 404-proof URL for GitHub Pages, custom domains, and local preview
+  const remoteUrl = `${effectiveBase}/?mode=remote&room=${roomCode}#remote`;
 
   useEffect(() => {
     if (isOpen) {
-      setTempDomainInput(customDomain || currentOrigin);
+      setTempDomainInput(customDomain || effectiveBase);
     }
-  }, [isOpen, customDomain, currentOrigin]);
+  }, [isOpen, customDomain, effectiveBase]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && remoteUrl) {
@@ -95,7 +109,14 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
       localStorage.removeItem('tahadi5_custom_domain');
     } catch {}
     setCustomDomain('');
-    setTempDomainInput(currentOrigin);
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      const pathname = window.location.pathname
+        .replace(/\/index\.html$/, '')
+        .replace(/\/remote\/?$/, '')
+        .replace(/\/+$/, '');
+      setTempDomainInput(`${origin}${pathname}`);
+    }
     setShowDomainSettings(false);
   };
 
@@ -130,11 +151,11 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
           </div>
         </div>
 
-        {/* Custom Domain Notification Pill */}
+        {/* Room & Domain Status Pill */}
         <div className="mb-3 p-2.5 rounded-2xl bg-[#070D1F] border border-slate-800 flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 truncate">
             <Globe className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span className="text-slate-400 shrink-0">رابط الريموت الحالي:</span>
+            <span className="text-slate-400 shrink-0">رابط الريموت:</span>
             <span className="font-mono text-cyan-300 font-bold truncate dir-ltr">
               {remoteUrl}
             </span>
@@ -148,13 +169,13 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
           </button>
         </div>
 
-        {/* Custom Domain Settings Dropdown Drawer */}
+        {/* Custom Domain Settings Drawer */}
         {showDomainSettings && (
           <div className="mb-4 p-4 rounded-2xl bg-gradient-to-b from-[#0D1533] to-[#070B1A] border-2 border-cyan-500/50 space-y-3 animate-fade-in shadow-xl">
             <div className="flex items-center justify-between">
               <span className="font-bold text-xs font-changa text-amber-300 flex items-center gap-1.5">
                 <Globe className="w-4 h-4 text-amber-400" />
-                <span>إعداد رابط الدومين الخاص بك (Custom Domain)</span>
+                <span>إعداد رابط دومين جيت هب الخاص بك (GitHub Pages / Custom Domain)</span>
               </span>
               {isUsingCustomDomain && (
                 <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">
@@ -164,14 +185,14 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-300 leading-relaxed">
-              إذا قمت بربط دومين مخصص لموقعك وتريد أن يفتح رمز الـ QR على هاتفك الدومين الجديد مباشرة، اكتبه هنا وسيتم حفظه وتحديث الكود فوراً:
+              إذا قمت برفع الموقع على GitHub Pages أو ربط دومين خاص وتريد أن يفتح رمز الـ QR على هاتفك ذلك الدومين مباشرة، الصقه هنا واحفظ:
             </p>
 
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 dir="ltr"
-                placeholder="https://example.com"
+                placeholder="https://example.com أو https://username.github.io/repo"
                 value={tempDomainInput}
                 onChange={(e) => setTempDomainInput(e.target.value)}
                 className="flex-1 bg-[#050814] border border-cyan-500/60 rounded-xl px-3 py-2 text-xs text-cyan-200 font-mono focus:outline-none focus:ring-2 focus:ring-cyan-400"
@@ -186,7 +207,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
 
             <div className="flex items-center justify-between pt-1 text-[11px]">
               <span className="text-slate-400">
-                الرابط التلقائي للمتصفح الحالي: <span className="font-mono text-slate-300 dir-ltr">{currentOrigin}</span>
+                كود غرفة المزامنة المباشرة: <span className="font-mono text-amber-300 font-bold">{roomCode}</span>
               </span>
               {isUsingCustomDomain && (
                 <button
@@ -218,7 +239,16 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             <span className="text-xs font-black text-slate-900 font-changa block">
               امسح الكود بكاميرا الهاتف لفتح ريموت التحكم
             </span>
-            <span className="text-[10px] text-slate-600 font-mono dir-ltr block truncate max-w-xs mt-0.5 font-bold">
+            <div className="flex items-center justify-center gap-1.5 mt-1">
+              <span className="text-[10px] text-emerald-700 bg-emerald-100 font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+                متوافق 100% مع جيت هب (بدون خطأ 404)
+              </span>
+              <span className="text-[10px] text-purple-700 bg-purple-100 font-mono font-bold px-2 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
+                <Wifi className="w-3 h-3" />
+                <span>غرفة {roomCode}</span>
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-600 font-mono dir-ltr block truncate max-w-xs mt-1 font-bold">
               {remoteUrl}
             </span>
           </div>
@@ -236,13 +266,13 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             <span className="w-4 h-4 rounded-full bg-cyan-900/80 border border-cyan-500/50 flex items-center justify-center text-[9px]">
               2
             </span>
-            <span>تفتح شاشة ريموت الهاتف: تحكم فوري بالألعاب والنتيجة والـ Ban/Pick.</span>
+            <span>يفتح ريموت التحكم فوراً دون أي خطأ 404 مع اتصال مباشر بالشاشة.</span>
           </div>
           <div className="flex items-center gap-2 text-emerald-300 font-bold">
             <span className="w-4 h-4 rounded-full bg-emerald-900/80 border border-emerald-500/50 flex items-center justify-center text-[9px]">
               3
             </span>
-            <span>المزامنة فورية وتعمل عبر الشبكة المحلية والإنترنت دون أي تأخير!</span>
+            <span>أي نقرة على هاتفك ترسل إشارة مشفرة للشاشة وتحدث النتيجة فوراً!</span>
           </div>
         </div>
 

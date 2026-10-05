@@ -9,6 +9,7 @@ import {
   DualTimerSyncState,
 } from '../types';
 import { INITIAL_TEAMS, DEFAULT_GAMES } from '../data/defaultGames';
+import { webrtcSync } from './webrtcSync';
 
 const STORAGE_KEYS = {
   TEAMS: 'tahadi5_teams_v1',
@@ -131,22 +132,51 @@ function syncIncomingUpdate(type: string, payload: unknown) {
   });
 }
 
-// Broadcast to local tabs, server WebSocket, and server REST
+// Initialize WebRTC listener & provider for serverless peer sync (GitHub Pages & custom domains)
+if (typeof window !== 'undefined') {
+  webrtcSync.onMessage((type, payload) => {
+    syncIncomingUpdate(type, payload);
+  });
+
+  webrtcSync.setFullStateProvider(() => {
+    const fullState: Record<string, unknown> = {};
+    try {
+      const teams = localStorage.getItem(STORAGE_KEYS.TEAMS);
+      if (teams) fullState['TEAMS_UPDATED'] = JSON.parse(teams);
+      const match = localStorage.getItem(STORAGE_KEYS.CURRENT_MATCH);
+      if (match) fullState['MATCH_UPDATED'] = JSON.parse(match);
+      const history = localStorage.getItem(STORAGE_KEYS.MATCHES_HISTORY);
+      if (history) fullState['HISTORY_UPDATED'] = JSON.parse(history);
+      const cards = localStorage.getItem(STORAGE_KEYS.CARD_STATES);
+      if (cards) fullState['CARDS_UPDATED'] = JSON.parse(cards);
+      const arena = localStorage.getItem(STORAGE_KEYS.ARENA_COLUMN_GAMES);
+      if (arena) fullState['ARENA_GAMES_UPDATED'] = JSON.parse(arena);
+    } catch {}
+    return fullState;
+  });
+}
+
+// Broadcast to local tabs, server WebSocket, server REST, and serverless WebRTC (PeerJS)
 export function broadcastMessage(type: string, payload: unknown) {
-  // 1. BroadcastChannel (same browser tabs)
+  // 1. WebRTC DataChannel (direct peer-to-peer between phone & laptop, 100% serverless)
+  try {
+    webrtcSync.broadcast(type, payload);
+  } catch {}
+
+  // 2. BroadcastChannel (same browser tabs)
   if (broadcastChannel) {
     try {
       broadcastChannel.postMessage({ type, payload, timestamp: Date.now() });
     } catch {}
   }
 
-  // 2. WebSocket (remote mobile phone / other devices)
+  // 3. WebSocket (remote mobile phone / other devices if Node.js server available)
   if (socket && socket.readyState === WebSocket.OPEN) {
     try {
       socket.send(JSON.stringify({ type, payload }));
     } catch {}
   } else {
-    // 3. Fallback POST to server if socket is reconnecting
+    // 4. Fallback POST to server if socket is reconnecting
     try {
       fetch('/api/state', {
         method: 'POST',

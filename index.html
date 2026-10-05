@@ -14,6 +14,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Changa:wght@600;700;800&family=Orbitron:wght@600;700;800;900&display=swap" rel="stylesheet">
   </head>
   <body class="bg-[#070B19] text-slate-100 antialiased selection:bg-purple-600 selection:text-white min-h-screen">
+    <script>
+      (function(){
+        // Handle redirect from GitHub Pages 404.html
+        var params = new URLSearchParams(window.location.search);
+        var redirect = params.get('p');
+        if (redirect) {
+          window.history.replaceState(null, null, decodeURIComponent(redirect));
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

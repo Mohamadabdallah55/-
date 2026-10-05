@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>دوري صراع النخبة | جاري التحويل...</title>
+    <script>
+      // Single Page Apps for GitHub Pages
+      // Redirects 404 routes back to root index.html preserving route and params
+      (function () {
+        var location = window.location;
+        var pathname = location.pathname;
+        var search = location.search;
+        var hash = location.hash;
+
+        // If user accessed /remote or /remote/
+        if (pathname.indexOf('/remote') !== -1) {
+          var cleanBase = pathname.replace(/\/remote.*$/, '/');
+          location.replace(cleanBase + '?mode=remote#remote');
+          return;
+        }
+
+        // Generic SPA redirect: redirect to base path with parameter
+        var pathSegments = pathname.split('/').filter(Boolean);
+        // If repo path e.g. /my-repo/subpage -> redirect to /my-repo/?p=subpage
+        location.replace(
+          location.protocol + '//' + location.host + '/' + (pathSegments.length > 1 ? pathSegments[0] + '/' : '') +
+          '?p=' + encodeURIComponent(pathname + search + hash)
+        );
+      })();
+    </script>
+  </head>
+  <body style="background-color: #070B19; color: #fff; font-family: sans-serif; text-align: center; padding: 50px;">
+    <h2>دوري صراع النخبة</h2>
+    <p>جاري تحميل الصفحة المطلوبة...</p>
+  </body>
+</html>

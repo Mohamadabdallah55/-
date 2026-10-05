@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>ريموت التحكم بالهاتف | دوري صراع النخبة</title>
+    <script>
+      (function() {
+        var search = window.location.search;
+        var hash = window.location.hash;
+        // Redirect directly to parent root with mode=remote
+        window.location.replace('../?mode=remote' + (search ? '&' + search.slice(1) : '') + (hash || '#remote'));
+      })();
+    </script>
+  </head>
+  <body style="background-color: #070B19; color: #fff; font-family: sans-serif; text-align: center; padding: 50px;">
+    <h2>ريموت التحكم بالهاتف</h2>
+    <p>جاري التحويل إلى واجهة التحكم...</p>
+  </body>
+</html>
