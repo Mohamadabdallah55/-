@@ -47,19 +47,36 @@ import { MobileRemoteController } from './components/MobileRemoteController';
 import { MobileConnectModal } from './components/MobileConnectModal';
 
 export default function App() {
-  // Check if opened as standalone window via URL hash #standalone-timer or #remote
+  // Check if opened as standalone window via URL hash #standalone-timer or #remote / /remote / ?mode=remote
   const [isStandaloneTimer, setIsStandaloneTimer] = useState<boolean>(false);
   const [isRemoteMode, setIsRemoteMode] = useState<boolean>(false);
   const [isMobileConnectModalOpen, setIsMobileConnectModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    const checkHash = () => {
-      setIsStandaloneTimer(window.location.hash === '#standalone-timer');
-      setIsRemoteMode(window.location.hash === '#remote');
+    const checkRoute = () => {
+      const isTimer =
+        window.location.hash === '#standalone-timer' ||
+        window.location.pathname.startsWith('/timer');
+
+      const isRemote =
+        window.location.hash === '#remote' ||
+        window.location.pathname.startsWith('/remote') ||
+        window.location.pathname === '/remote' ||
+        new URLSearchParams(window.location.search).get('mode') === 'remote' ||
+        new URLSearchParams(window.location.search).get('remote') === 'true' ||
+        new URLSearchParams(window.location.search).get('tab') === 'remote';
+
+      setIsStandaloneTimer(isTimer);
+      setIsRemoteMode(isRemote);
     };
-    checkHash();
-    window.addEventListener('hashchange', checkHash);
-    return () => window.removeEventListener('hashchange', checkHash);
+
+    checkRoute();
+    window.addEventListener('hashchange', checkRoute);
+    window.addEventListener('popstate', checkRoute);
+    return () => {
+      window.removeEventListener('hashchange', checkRoute);
+      window.removeEventListener('popstate', checkRoute);
+    };
   }, []);
 
   // Main Persistent States
@@ -348,7 +365,12 @@ export default function App() {
         onResetAllBansPicks={handleResetAllBansPicks}
         onChangeColumnGame={handleChangeColumnGame}
         onClose={() => {
-          window.location.hash = '';
+          if (window.location.hash === '#remote') {
+            window.location.hash = '';
+          }
+          if (window.location.pathname.startsWith('/remote')) {
+            window.history.pushState(null, '', '/');
+          }
           setIsRemoteMode(false);
         }}
       />

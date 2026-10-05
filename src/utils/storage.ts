@@ -93,6 +93,22 @@ if (typeof window !== 'undefined') {
       }
     })
     .catch(() => {});
+
+  // Fallback periodic poll if WebSocket is disconnected or blocked by CDN/proxy
+  setInterval(() => {
+    if (!socket || socket.readyState !== 1) { // 1 = WebSocket.OPEN
+      fetch('/api/state')
+        .then((r) => r.json())
+        .then((cachedState) => {
+          if (cachedState && typeof cachedState === 'object') {
+            Object.entries(cachedState).forEach(([type, payload]) => {
+              syncIncomingUpdate(type, payload);
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, 1500);
 }
 
 function syncIncomingUpdate(type: string, payload: unknown) {
