@@ -1,16 +1,33 @@
 import { Peer, DataConnection } from 'peerjs';
 
 type MessageHandler = (type: string, payload: unknown) => void;
+type StatusHandler = (status: 'connected' | 'connecting' | 'disconnected', clientCount: number) => void;
+
+// High-reliability Google STUN servers for NAT / Firewall traversal on mobile 4G/5G carriers
+const PEER_ICE_CONFIG = {
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+    ],
+  },
+};
 
 class WebRTCSyncManager {
   private peer: Peer | null = null;
   private connections: Map<string, DataConnection> = new Map();
   private hostConnection: DataConnection | null = null;
   private messageHandlers: Set<MessageHandler> = new Set();
+  private statusHandlers: Set<StatusHandler> = new Set();
   private roomCode: string = '';
   private isHost: boolean = true;
-  private isConnected: boolean = false;
+  private status: 'connected' | 'connecting' | 'disconnected' = 'connecting';
   private fullStateProvider: (() => Record<string, unknown>) | null = null;
+  private reconnectTimer: number | null = null;
+  private heartbeatTimer: number | null = null;
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -28,7 +45,6 @@ class WebRTCSyncManager {
       this.roomCode = roomFromUrl.toUpperCase();
       this.isHost = false;
     } else if (isRemote) {
-      // Remote opened without room in query: check storage or default room
       const saved = localStorage.getItem('tahadi5_active_room');
       this.roomCode = saved || 'ELITE-ARENA';
       this.isHost = false;
@@ -45,6 +61,7 @@ class WebRTCSyncManager {
     }
 
     this.initPeer();
+    this.startHeartbeat();
   }
 
   public setFullStateProvider(provider: () => Record<string, unknown>) {
@@ -59,8 +76,12 @@ class WebRTCSyncManager {
     return this.isHost;
   }
 
-  public getIsConnected(): boolean {
-    return this.isConnected;
+  public getStatus(): 'connected' | 'connecting' | 'disconnected' {
+    return this.status;
+  }
+
+  public getClientCount(): number {
+    return this.connections.size;
   }
 
   public setRoomCode(newRoomCode: string) {
@@ -71,15 +92,35 @@ class WebRTCSyncManager {
     this.initPeer();
   }
 
+  public onStatusChange(handler: StatusHandler): () => void {
+    this.statusHandlers.add(handler);
+    handler(this.status, this.isHost ? this.connections.size : (this.status === 'connected' ? 1 : 0));
+    return () => {
+      this.statusHandlers.delete(handler);
+    };
+  }
+
+  private updateStatus(newStatus: 'connected' | 'connecting' | 'disconnected') {
+    this.status = newStatus;
+    const count = this.isHost ? this.connections.size : (newStatus === 'connected' ? 1 : 0);
+    this.statusHandlers.forEach((handler) => {
+      try {
+        handler(newStatus, count);
+      } catch {}
+    });
+  }
+
   private initPeer() {
     try {
+      this.updateStatus('connecting');
+
       if (this.isHost) {
-        // Host tries to register its clean roomCode directly
+        // Host tries to register fixed room ID
         const peerId = `tahadi5-${this.roomCode.toLowerCase()}`;
-        this.peer = new Peer(peerId);
+        this.peer = new Peer(peerId, PEER_ICE_CONFIG);
 
         this.peer.on('open', () => {
-          this.isConnected = true;
+          this.updateStatus(this.connections.size > 0 ? 'connected' : 'connecting');
         });
 
         this.peer.on('connection', (conn) => {
@@ -87,35 +128,40 @@ class WebRTCSyncManager {
         });
 
         this.peer.on('error', (err) => {
-          // If ID is already taken or broker busy, fallback to random ID
           if (err.type === 'unavailable-id') {
+            // If ID busy, fallback to dynamic peer and advertise
             this.peer?.destroy();
-            this.peer = new Peer();
-            this.peer.on('open', (assignedId) => {
-              this.isConnected = true;
+            this.peer = new Peer(PEER_ICE_CONFIG);
+            this.peer.on('open', () => {
               this.peer?.on('connection', (conn) => this.setupHostConnection(conn));
             });
+          } else {
+            this.updateStatus('disconnected');
           }
         });
       } else {
         // Client (Phone Remote)
-        this.peer = new Peer();
+        this.peer = new Peer(PEER_ICE_CONFIG);
+
         this.peer.on('open', () => {
           this.connectToHost();
         });
 
         this.peer.on('error', () => {
-          setTimeout(() => this.connectToHost(), 3000);
+          this.updateStatus('disconnected');
+          this.scheduleReconnect();
         });
       }
     } catch (e) {
-      console.warn('WebRTC initialization skipped:', e);
+      console.warn('WebRTC peer error:', e);
+      this.updateStatus('disconnected');
     }
   }
 
   private setupHostConnection(conn: DataConnection) {
     conn.on('open', () => {
       this.connections.set(conn.peer, conn);
+      this.updateStatus('connected');
 
       // Send initial full state to newly connected smartphone
       if (this.fullStateProvider) {
@@ -132,10 +178,12 @@ class WebRTCSyncManager {
 
     conn.on('close', () => {
       this.connections.delete(conn.peer);
+      this.updateStatus(this.connections.size > 0 ? 'connected' : 'connecting');
     });
 
     conn.on('error', () => {
       this.connections.delete(conn.peer);
+      this.updateStatus(this.connections.size > 0 ? 'connected' : 'connecting');
     });
   }
 
@@ -143,12 +191,13 @@ class WebRTCSyncManager {
     if (!this.peer || this.peer.destroyed) return;
 
     try {
+      this.updateStatus('connecting');
       const targetPeerId = `tahadi5-${this.roomCode.toLowerCase()}`;
       const conn = this.peer.connect(targetPeerId, { reliable: true });
 
       conn.on('open', () => {
         this.hostConnection = conn;
-        this.isConnected = true;
+        this.updateStatus('connected');
       });
 
       conn.on('data', (data) => {
@@ -157,22 +206,59 @@ class WebRTCSyncManager {
 
       conn.on('close', () => {
         this.hostConnection = null;
-        this.isConnected = false;
-        setTimeout(() => this.connectToHost(), 3000);
+        this.updateStatus('disconnected');
+        this.scheduleReconnect();
       });
 
       conn.on('error', () => {
         this.hostConnection = null;
-        this.isConnected = false;
-        setTimeout(() => this.connectToHost(), 3000);
+        this.updateStatus('disconnected');
+        this.scheduleReconnect();
       });
-    } catch {}
+    } catch {
+      this.updateStatus('disconnected');
+      this.scheduleReconnect();
+    }
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.isHost && (!this.hostConnection || !this.hostConnection.open)) {
+        this.connectToHost();
+      }
+    }, 2000);
+  }
+
+  private startHeartbeat() {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = window.setInterval(() => {
+      if (!this.isHost && this.hostConnection && this.hostConnection.open) {
+        try {
+          this.hostConnection.send(JSON.stringify({ type: 'PING' }));
+        } catch {}
+      }
+    }, 5000);
   }
 
   private handleIncomingData(data: unknown, senderPeerId?: string) {
     try {
       const str = typeof data === 'string' ? data : JSON.stringify(data);
       const parsed = JSON.parse(str);
+
+      if (parsed?.type === 'PING') {
+        if (this.isHost && senderPeerId) {
+          const conn = this.connections.get(senderPeerId);
+          conn?.send(JSON.stringify({ type: 'PONG' }));
+        }
+        return;
+      }
+
+      if (parsed?.type === 'PONG') {
+        this.updateStatus('connected');
+        return;
+      }
 
       if (parsed && parsed.type) {
         // Dispatch to local subscribers
@@ -223,13 +309,15 @@ class WebRTCSyncManager {
 
   private cleanup() {
     try {
+      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+      if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
       this.connections.forEach((conn) => conn.close());
       this.connections.clear();
       this.hostConnection?.close();
       this.hostConnection = null;
       this.peer?.destroy();
       this.peer = null;
-      this.isConnected = false;
+      this.updateStatus('disconnected');
     } catch {}
   }
 }

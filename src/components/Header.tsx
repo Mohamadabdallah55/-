@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ExternalLink,
   Users,
@@ -6,7 +6,9 @@ import {
   Tv,
   Keyboard,
   Download,
+  Wifi,
 } from 'lucide-react';
+import { webrtcSync } from '../utils/webrtcSync';
 
 interface HeaderProps {
   activeTab: 'match' | 'arena' | 'library' | 'standings' | 'timer' | 'broadcast';
@@ -30,6 +32,14 @@ export const Header: React.FC<HeaderProps> = ({
   canInstallPwa,
   onInstallPwa,
 }) => {
+  const [clientCount, setClientCount] = useState<number>(0);
+
+  useEffect(() => {
+    return webrtcSync.onStatusChange((_status, count) => {
+      setClientCount(count);
+    });
+  }, []);
+
   const openStandaloneTimer = () => {
     window.open(window.location.href.split('#')[0] + '#standalone-timer', '_blank', 'width=1100,height=750');
   };
@@ -112,16 +122,28 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Mobile Controller QR */}
+          {/* Mobile Controller QR & Live Status */}
           {onOpenMobileConnectModal && (
-            <button
-              onClick={onOpenMobileConnectModal}
-              title="تحكم بالموقع والألعاب من هاتفك المحمول عن بُعد"
-              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/60 rounded-xl shadow-sm transition-all whitespace-nowrap active:scale-95"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">تحكم بالهاتف 📱</span>
-            </button>
+            clientCount > 0 ? (
+              <button
+                onClick={onOpenMobileConnectModal}
+                title={`الريموت متصل بالهاتف (${clientCount} جهاز)`}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-emerald-200 bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-500 rounded-xl shadow-md shadow-emerald-500/20 whitespace-nowrap active:scale-95"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <span className="hidden sm:inline">متصل بالريموت ({clientCount}) 🟢</span>
+                <span className="sm:hidden font-mono text-[10px]">({clientCount}) 🟢</span>
+              </button>
+            ) : (
+              <button
+                onClick={onOpenMobileConnectModal}
+                title="تحكم بالموقع والألعاب من هاتفك المحمول عن بُعد"
+                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/60 rounded-xl shadow-sm transition-all whitespace-nowrap active:scale-95"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">تحكم بالهاتف 📱</span>
+              </button>
+            )
           )}
 
           {/* Teams Customization */}

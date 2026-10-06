@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Team,
   CurrentMatch,
@@ -16,6 +16,7 @@ import {
   saveArenaColumnGames,
 } from '../utils/storage';
 import { DEFAULT_GAMES } from '../data/defaultGames';
+import { webrtcSync } from '../utils/webrtcSync';
 import {
   Smartphone,
   Trophy,
@@ -79,6 +80,22 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('digital');
   const [editingGameSlot, setEditingGameSlot] = useState<{ catId: string; slotIdx: number } | null>(null);
   const [remoteFeedback, setRemoteFeedback] = useState<string | null>(null);
+  const [connStatus, setConnStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
+  const roomCode = webrtcSync.getRoomCode();
+
+  useEffect(() => {
+    return webrtcSync.onStatusChange((status) => {
+      setConnStatus(status);
+    });
+  }, []);
+
+  const triggerHaptic = (ms: number = 25) => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(ms);
+      } catch {}
+    }
+  };
 
   const showFeedback = (msg: string) => {
     setRemoteFeedback(msg);
@@ -148,21 +165,32 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
           </div>
           <div>
             <h1 className="font-changa font-bold text-sm text-white flex items-center gap-1.5">
-              <span>ريموت التحكم المباشر</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>ريموت صراع النخبة</span>
             </h1>
-            <p className="text-[10px] text-slate-400">أوامر فورية للابتوب عبر الهاتف</p>
+            <p className="text-[10px] text-slate-400">غرفة: <span className="font-mono text-cyan-300 font-bold">{roomCode}</span></p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-800/80 px-2 py-0.5 rounded-full font-bold">
-            متصل 🟢
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+            connStatus === 'connected'
+              ? 'bg-emerald-950 text-emerald-300 border border-emerald-600'
+              : connStatus === 'connecting'
+              ? 'bg-amber-950 text-amber-300 border border-amber-600'
+              : 'bg-rose-950 text-rose-300 border border-rose-600'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              connStatus === 'connected' ? 'bg-emerald-400 animate-ping' : connStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-rose-400'
+            }`} />
+            {connStatus === 'connected' ? 'ONLINE 🟢' : connStatus === 'connecting' ? 'CONNECTING 🟡' : 'OFFLINE 🔴'}
           </span>
           {onClose && (
             <button
-              onClick={onClose}
-              className="px-2.5 py-1 text-xs font-bold text-slate-300 bg-slate-800 rounded-lg hover:bg-slate-700"
+              onClick={() => {
+                triggerHaptic(15);
+                onClose();
+              }}
+              className="px-2 py-1 text-xs font-bold text-slate-300 bg-slate-800 rounded-lg hover:bg-slate-700"
             >
               عرض الشاشة
             </button>
@@ -643,21 +671,23 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <div className="flex items-center gap-2 mt-3 w-full">
                 <button
                   onClick={() => {
+                    triggerHaptic(20);
                     sound.playTick();
                     onUpdateScore('A', -1);
                   }}
                   disabled={currentMatch.teamAScore <= 0}
-                  className="flex-1 py-3 rounded-xl bg-slate-800 disabled:opacity-30 text-white font-bold text-lg flex items-center justify-center"
+                  className="flex-1 py-3 rounded-xl bg-slate-800 disabled:opacity-30 text-white font-bold text-lg flex items-center justify-center active:scale-95"
                 >
                   <Minus className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => {
-                    sound.playTick();
+                    triggerHaptic(30);
+                    sound.playScorePoint(true);
                     onUpdateScore('A', 1);
                   }}
                   disabled={currentMatch.teamAScore >= 3}
-                  className="flex-1 py-3 rounded-xl bg-purple-600 disabled:opacity-30 text-white font-bold text-lg flex items-center justify-center shadow-lg shadow-purple-600/40"
+                  className="flex-1 py-3 rounded-xl bg-purple-600 disabled:opacity-30 text-white font-bold text-lg flex items-center justify-center shadow-lg shadow-purple-600/40 active:scale-95"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -675,21 +705,23 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <div className="flex items-center gap-2 mt-3 w-full">
                 <button
                   onClick={() => {
+                    triggerHaptic(20);
                     sound.playTick();
                     onUpdateScore('B', -1);
                   }}
                   disabled={currentMatch.teamBScore <= 0}
-                  className="flex-1 py-3 rounded-xl bg-slate-800 disabled:opacity-30 text-white font-bold text-lg flex items-center justify-center"
+                  className="flex-1 py-3 rounded-xl bg-slate-800 disabled:opacity-30 text-white font-bold text-lg flex items-center justify-center active:scale-95"
                 >
                   <Minus className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => {
-                    sound.playTick();
+                    triggerHaptic(30);
+                    sound.playScorePoint(false);
                     onUpdateScore('B', 1);
                   }}
                   disabled={currentMatch.teamBScore >= 3}
-                  className="flex-1 py-3 rounded-xl bg-cyan-600 disabled:opacity-30 text-white font-bold text-lg flex items-center justify-center shadow-lg shadow-cyan-600/40"
+                  className="flex-1 py-3 rounded-xl bg-cyan-600 disabled:opacity-30 text-white font-bold text-lg flex items-center justify-center shadow-lg shadow-cyan-600/40 active:scale-95"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -701,18 +733,22 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
           <div className="space-y-2 pt-2">
             <button
               onClick={() => {
+                triggerHaptic(50);
                 onFinishMatch();
               }}
               disabled={currentMatch.teamAScore === 0 && currentMatch.teamBScore === 0}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:opacity-40 text-white font-black font-changa text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:opacity-40 text-white font-black font-changa text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 active:scale-95"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>إنهاء المباراة وتحديث الترتيب على الشاشة</span>
             </button>
 
             <button
-              onClick={onResetCurrentMatch}
-              className="w-full py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2"
+              onClick={() => {
+                triggerHaptic(40);
+                onResetCurrentMatch();
+              }}
+              className="w-full py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white font-bold text-xs flex items-center justify-center gap-2 active:scale-95"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>تصفير النتيجة (0 - 0)</span>

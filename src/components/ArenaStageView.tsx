@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { sound } from '../utils/audio';
+import { webrtcSync } from '../utils/webrtcSync';
 
 interface ArenaStageViewProps {
   currentMatch: CurrentMatch;
@@ -34,6 +35,13 @@ export const ArenaStageView: React.FC<ArenaStageViewProps> = ({
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [clientCount, setClientCount] = useState<number>(0);
+
+  useEffect(() => {
+    return webrtcSync.onStatusChange((_status, count) => {
+      setClientCount(count);
+    });
+  }, []);
 
   const teamA = teams.find((t) => t.id === currentMatch.teamAId) || teams[0];
   const teamB = teams.find((t) => t.id === currentMatch.teamBId) || teams[1] || teams[0];
@@ -111,6 +119,15 @@ export const ArenaStageView: React.FC<ArenaStageViewProps> = ({
 
         {/* Quick Stage Actions */}
         <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-mono px-2.5 py-1 rounded-xl font-bold flex items-center gap-1.5 ${
+            clientCount > 0
+              ? 'bg-emerald-950 text-emerald-300 border border-emerald-600'
+              : 'bg-slate-900 text-slate-400 border border-slate-800'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${clientCount > 0 ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
+            <span>{clientCount > 0 ? `REMOTE (${clientCount}) 🟢` : 'REMOTE READY'}</span>
+          </span>
+
           {onOpenHotkeys && (
             <button
               onClick={onOpenHotkeys}
