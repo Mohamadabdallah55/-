@@ -81,7 +81,7 @@ export const TeamsModal: React.FC<TeamsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 animate-fade-in overflow-y-auto">
       <div className="bg-[#0C1226] border border-slate-700 rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl relative text-right my-8">
         {/* Close Button */}
         <button

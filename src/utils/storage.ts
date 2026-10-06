@@ -112,16 +112,36 @@ if (typeof window !== 'undefined') {
   }, 1500);
 }
 
+// Throttled local storage writer with in-memory batching to eliminate synchronous frame drops
+const pendingWrites = new Map<string, string>();
+let writeBatchScheduled = false;
+
+function batchSetLocalStorage(key: string, value: string) {
+  pendingWrites.set(key, value);
+  if (!writeBatchScheduled && typeof window !== 'undefined') {
+    writeBatchScheduled = true;
+    requestAnimationFrame(() => {
+      try {
+        pendingWrites.forEach((v, k) => {
+          localStorage.setItem(k, v);
+        });
+        pendingWrites.clear();
+      } catch {}
+      writeBatchScheduled = false;
+    });
+  }
+}
+
 function syncIncomingUpdate(type: string, payload: unknown) {
-  // Sync to local storage
+  // Sync to local storage with throttled batching
   try {
-    if (type === 'TEAMS_UPDATED') localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(payload));
-    if (type === 'MATCH_UPDATED') localStorage.setItem(STORAGE_KEYS.CURRENT_MATCH, JSON.stringify(payload));
-    if (type === 'HISTORY_UPDATED') localStorage.setItem(STORAGE_KEYS.MATCHES_HISTORY, JSON.stringify(payload));
-    if (type === 'CATEGORIES_UPDATED') localStorage.setItem(STORAGE_KEYS.SELECTED_CATEGORIES, JSON.stringify(payload));
-    if (type === 'CARDS_UPDATED') localStorage.setItem(STORAGE_KEYS.CARD_STATES, JSON.stringify(payload));
-    if (type === 'GAMES_UPDATED') localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(payload));
-    if (type === 'ARENA_GAMES_UPDATED') localStorage.setItem(STORAGE_KEYS.ARENA_COLUMN_GAMES, JSON.stringify(payload));
+    if (type === 'TEAMS_UPDATED') batchSetLocalStorage(STORAGE_KEYS.TEAMS, JSON.stringify(payload));
+    if (type === 'MATCH_UPDATED') batchSetLocalStorage(STORAGE_KEYS.CURRENT_MATCH, JSON.stringify(payload));
+    if (type === 'HISTORY_UPDATED') batchSetLocalStorage(STORAGE_KEYS.MATCHES_HISTORY, JSON.stringify(payload));
+    if (type === 'CATEGORIES_UPDATED') batchSetLocalStorage(STORAGE_KEYS.SELECTED_CATEGORIES, JSON.stringify(payload));
+    if (type === 'CARDS_UPDATED') batchSetLocalStorage(STORAGE_KEYS.CARD_STATES, JSON.stringify(payload));
+    if (type === 'GAMES_UPDATED') batchSetLocalStorage(STORAGE_KEYS.GAMES, JSON.stringify(payload));
+    if (type === 'ARENA_GAMES_UPDATED') batchSetLocalStorage(STORAGE_KEYS.ARENA_COLUMN_GAMES, JSON.stringify(payload));
   } catch {}
 
   // Notify registered React hooks
@@ -216,7 +236,7 @@ export function loadTeams(): Team[] {
 
 export function saveTeams(teams: Team[]) {
   try {
-    localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(teams));
+    batchSetLocalStorage(STORAGE_KEYS.TEAMS, JSON.stringify(teams));
     broadcastMessage('TEAMS_UPDATED', teams);
   } catch {}
 }
@@ -248,7 +268,7 @@ export function loadGames(): GameItem[] {
 
 export function saveGames(games: GameItem[]) {
   try {
-    localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
+    batchSetLocalStorage(STORAGE_KEYS.GAMES, JSON.stringify(games));
     broadcastMessage('GAMES_UPDATED', games);
   } catch {}
 }
@@ -274,7 +294,7 @@ export function loadSelectedCategories(): CategoryKey[] {
 
 export function saveSelectedCategories(categories: CategoryKey[]) {
   try {
-    localStorage.setItem(STORAGE_KEYS.SELECTED_CATEGORIES, JSON.stringify(categories));
+    batchSetLocalStorage(STORAGE_KEYS.SELECTED_CATEGORIES, JSON.stringify(categories));
     broadcastMessage('CATEGORIES_UPDATED', categories);
   } catch {}
 }
@@ -309,7 +329,7 @@ export function loadCurrentMatch(teams: Team[]): CurrentMatch {
 
 export function saveCurrentMatch(match: CurrentMatch) {
   try {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_MATCH, JSON.stringify(match));
+    batchSetLocalStorage(STORAGE_KEYS.CURRENT_MATCH, JSON.stringify(match));
     broadcastMessage('MATCH_UPDATED', match);
   } catch {}
 }
@@ -325,7 +345,7 @@ export function loadMatchesHistory(): MatchRecord[] {
 
 export function saveMatchesHistory(matches: MatchRecord[]) {
   try {
-    localStorage.setItem(STORAGE_KEYS.MATCHES_HISTORY, JSON.stringify(matches));
+    batchSetLocalStorage(STORAGE_KEYS.MATCHES_HISTORY, JSON.stringify(matches));
     broadcastMessage('HISTORY_UPDATED', matches);
   } catch {}
 }
@@ -341,7 +361,7 @@ export function loadCardStates(): Record<string, CardState> {
 
 export function saveCardStates(states: Record<string, CardState>) {
   try {
-    localStorage.setItem(STORAGE_KEYS.CARD_STATES, JSON.stringify(states));
+    batchSetLocalStorage(STORAGE_KEYS.CARD_STATES, JSON.stringify(states));
     broadcastMessage('CARDS_UPDATED', states);
   } catch {}
 }
@@ -349,7 +369,7 @@ export function saveCardStates(states: Record<string, CardState>) {
 // Timer Sync
 export function saveTimerSync(state: DualTimerSyncState) {
   try {
-    localStorage.setItem(STORAGE_KEYS.TIMER_SYNC, JSON.stringify(state));
+    batchSetLocalStorage(STORAGE_KEYS.TIMER_SYNC, JSON.stringify(state));
     broadcastMessage('TIMER_SYNC', state);
   } catch {}
 }

@@ -45,12 +45,44 @@ import { GamesLibraryMap } from './components/GamesLibraryMap';
 import { ArenaBattleBoard } from './components/ArenaBattleBoard';
 import { MobileRemoteController } from './components/MobileRemoteController';
 import { MobileConnectModal } from './components/MobileConnectModal';
+import { ArenaStageView } from './components/ArenaStageView';
+import { VictoryModal } from './components/VictoryModal';
+import { HotkeysModal } from './components/HotkeysModal';
 
 export default function App() {
   // Check if opened as standalone window via URL hash #standalone-timer or #remote / /remote / ?mode=remote
   const [isStandaloneTimer, setIsStandaloneTimer] = useState<boolean>(false);
   const [isRemoteMode, setIsRemoteMode] = useState<boolean>(false);
   const [isMobileConnectModalOpen, setIsMobileConnectModalOpen] = useState<boolean>(false);
+
+  // Arena Polish States
+  const [isStageViewOpen, setIsStageViewOpen] = useState<boolean>(false);
+  const [isHotkeysModalOpen, setIsHotkeysModalOpen] = useState<boolean>(false);
+  const [isVictoryModalOpen, setIsVictoryModalOpen] = useState<boolean>(false);
+  const [victoryWinner, setVictoryWinner] = useState<Team | null>(null);
+  const [victoryLoser, setVictoryLoser] = useState<Team | null>(null);
+  const [isScreenShaking, setIsScreenShaking] = useState<boolean>(false);
+
+  // PWA Install prompt state
+  const [deferredPwaPrompt, setDeferredPwaPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPwaPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+  }, []);
+
+  const handleInstallPwa = () => {
+    if (deferredPwaPrompt) {
+      deferredPwaPrompt.prompt();
+      deferredPwaPrompt.userChoice.then(() => {
+        setDeferredPwaPrompt(null);
+      });
+    }
+  };
 
   useEffect(() => {
     const checkRoute = () => {
@@ -127,6 +159,116 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // Handle Score Updates (+ / -)
+  const handleUpdateScore = (teamSlot: 'A' | 'B', delta: number) => {
+    const nextMatch = { ...currentMatch };
+    if (teamSlot === 'A') {
+      const nextScore = Math.max(0, Math.min(3, nextMatch.teamAScore + delta));
+      nextMatch.teamAScore = nextScore;
+    } else {
+      const nextScore = Math.max(0, Math.min(3, nextMatch.teamBScore + delta));
+      nextMatch.teamBScore = nextScore;
+    }
+    setCurrentMatch(nextMatch);
+    saveCurrentMatch(nextMatch);
+  };
+
+  // Keyboard Hotkeys Manager
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      // Space: tick sound or countdown toggle
+      if (e.code === 'Space') {
+        e.preventDefault();
+        sound.playTick();
+        return;
+      }
+
+      // ArrowUp / ArrowDown: Team A score
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        sound.playScorePoint(true);
+        handleUpdateScore('A', 1);
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        sound.playTick();
+        handleUpdateScore('A', -1);
+        return;
+      }
+
+      // ArrowRight / ArrowLeft / + / -: Team B score
+      if (e.key === 'ArrowRight' || e.key === '=' || e.key === '+') {
+        e.preventDefault();
+        sound.playScorePoint(false);
+        handleUpdateScore('B', 1);
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === '-') {
+        e.preventDefault();
+        sound.playTick();
+        handleUpdateScore('B', -1);
+        return;
+      }
+
+      // 'B' or 'b': Toggle Arena Stage View
+      if (e.key === 'b' || e.key === 'B' || e.key === 'لا') {
+        e.preventDefault();
+        setIsStageViewOpen((prev) => !prev);
+        return;
+      }
+
+      // 'F' or 'f': Fullscreen toggle
+      if (e.key === 'f' || e.key === 'F' || e.key === 'ب') {
+        e.preventDefault();
+        try {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen?.().catch(() => {});
+          } else {
+            document.exitFullscreen?.().catch(() => {});
+          }
+        } catch {}
+        return;
+      }
+
+      // 'T' or 't': Switch to Timer tab
+      if (e.key === 't' || e.key === 'T' || e.key === 'ف') {
+        e.preventDefault();
+        setActiveTab('timer');
+        return;
+      }
+
+      // 'M' or 'm': Switch to Match tab
+      if (e.key === 'm' || e.key === 'M' || e.key === 'ة') {
+        e.preventDefault();
+        setActiveTab('match');
+        return;
+      }
+
+      // Escape: Close modals
+      if (e.key === 'Escape') {
+        setIsStageViewOpen(false);
+        setIsHotkeysModalOpen(false);
+        setIsVictoryModalOpen(false);
+        setIsMobileConnectModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentMatch]);
+
   // Column game swap handler (from phone or PC)
   const handleChangeColumnGame = (categoryId: string, slotIndex: number, newGameId: string) => {
     const next = { ...arenaColumnGames };
@@ -154,20 +296,6 @@ export default function App() {
       />
     );
   }
-
-  // Handle Score Updates (+ / -)
-  const handleUpdateScore = (teamSlot: 'A' | 'B', delta: number) => {
-    const nextMatch = { ...currentMatch };
-    if (teamSlot === 'A') {
-      const nextScore = Math.max(0, Math.min(3, nextMatch.teamAScore + delta));
-      nextMatch.teamAScore = nextScore;
-    } else {
-      const nextScore = Math.max(0, Math.min(3, nextMatch.teamBScore + delta));
-      nextMatch.teamBScore = nextScore;
-    }
-    setCurrentMatch(nextMatch);
-    saveCurrentMatch(nextMatch);
-  };
 
   // Change Team A or B
   const handleChangeTeam = (slot: 'A' | 'B', newTeamId: string) => {
@@ -202,6 +330,9 @@ export default function App() {
         ? currentMatch.teamBId
         : currentMatch.teamAId;
 
+    const winnerObj = teams.find((t) => t.id === winnerId) || (winnerId === currentMatch.teamAId ? teamA : teamB);
+    const loserObj = teams.find((t) => t.id === loserId) || (loserId === currentMatch.teamAId ? teamA : teamB);
+
     const newRecord: MatchRecord = {
       id: `match-${Date.now()}`,
       date: new Date().toLocaleDateString('ar-SA', {
@@ -228,8 +359,15 @@ export default function App() {
     setMatchesHistory(updatedHistory);
     saveMatchesHistory(updatedHistory);
 
-    // Play Victory Sound & Fire Confetti!
-    sound.playVictory();
+    // Trigger Screen Shake & Victory Modal
+    setIsScreenShaking(true);
+    setTimeout(() => setIsScreenShaking(false), 500);
+
+    setVictoryWinner(winnerObj);
+    setVictoryLoser(loserObj);
+    setIsVictoryModalOpen(true);
+
+    // Confetti burst
     try {
       confetti({
         particleCount: 120,
@@ -261,77 +399,72 @@ export default function App() {
     });
     setCardStates(nextCardStates);
     saveCardStates(nextCardStates);
-
-    // Finish match without MVP modal
   };
 
-  // Game Rules Persistence Handler
-  const handleSaveGameRules = (gameId: string, rules: string) => {
-    const updatedGames = games.map((g) =>
-      g.id === gameId ? { ...g, rules } : g
-    );
-    setGames(updatedGames);
-    saveGames(updatedGames);
-  };
-
-  // Reset Current Match Score
+  // Reset current match
   const handleResetCurrentMatch = () => {
-    const reset: CurrentMatch = {
-      ...currentMatch,
+    const resetMatch: CurrentMatch = {
+      teamAId: currentMatch.teamAId,
+      teamBId: currentMatch.teamBId,
       teamAScore: 0,
       teamBScore: 0,
       activeGameId: null,
       currentRound: 1,
+      rounds: [],
     };
-    setCurrentMatch(reset);
-    saveCurrentMatch(reset);
+    setCurrentMatch(resetMatch);
+    saveCurrentMatch(resetMatch);
   };
 
-  // Toggle Category selection (5 categories)
-  const handleToggleCategory = (catId: CategoryKey) => {
-    sound.playTick();
-    if (selectedCategories.includes(catId)) {
-      if (selectedCategories.length <= 1) return;
-      const next = selectedCategories.filter((id) => id !== catId);
-      setSelectedCategories(next);
-      saveSelectedCategories(next);
-    } else {
-      const next = [...selectedCategories, catId];
-      setSelectedCategories(next);
-      saveSelectedCategories(next);
-    }
+  // Reset all Ban/Pick cards
+  const handleResetAllBansPicks = () => {
+    const resetCards: Record<string, { gameId: string; status: BanPickStatus }> = {};
+    setCardStates(resetCards);
+    saveCardStates(resetCards);
   };
 
-  // Card Status Update (Ban / Pick / Current / Reset)
-  // CRITICAL: Manual click only, never automatic!
+  // Set card status
   const handleSetCardStatus = (gameId: string, status: BanPickStatus) => {
-    const nextStates = {
+    sound.playPick(status.startsWith('banned') ? 'ban' : 'pick');
+    const nextCards = {
       ...cardStates,
       [gameId]: { gameId, status },
     };
-    setCardStates(nextStates);
-    saveCardStates(nextStates);
+    setCardStates(nextCards);
+    saveCardStates(nextCards);
   };
 
+  // Set active game for current match
   const handleSetActiveGame = (gameId: string | null) => {
+    if (gameId) {
+      sound.playPick('pick');
+      sound.playRoundBell();
+    }
     const nextMatch = { ...currentMatch, activeGameId: gameId };
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
 
-  const handleResetAllBansPicks = () => {
-    setCardStates({});
-    saveCardStates({});
-    handleSetActiveGame(null);
-  };
-
-  // Teams Update from Modal
+  // Save customized teams
   const handleSaveTeams = (updatedTeams: Team[]) => {
     setTeams(updatedTeams);
     saveTeams(updatedTeams);
   };
 
-  // Delete Match from History
+  // Save selected categories
+  const handleSelectCategories = (cats: CategoryKey[]) => {
+    setSelectedCategories(cats);
+    saveSelectedCategories(cats);
+  };
+
+  // Save game item
+  const handleSaveGame = (updatedGame: GameItem) => {
+    const next = games.map((g) => (g.id === updatedGame.id ? updatedGame : g));
+    setGames(next);
+    saveGames(next);
+  };
+
+  // Delete match from history
   const handleDeleteMatch = (matchId: string) => {
     const next = matchesHistory.filter((m) => m.id !== matchId);
     setMatchesHistory(next);
@@ -378,7 +511,11 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070B19] text-slate-100 flex flex-col font-cairo">
+    <div
+      className={`min-h-screen bg-[#070B19] text-slate-100 flex flex-col font-cairo transition-transform ${
+        isScreenShaking ? 'animate-screen-shake' : ''
+      }`}
+    >
       {/* Top Bar Navigation */}
       <Header
         activeTab={activeTab}
@@ -386,11 +523,15 @@ export default function App() {
         onOpenTeamsModal={() => setIsTeamsModalOpen(true)}
         onOpenResetModal={handleResetLeague}
         onOpenMobileConnectModal={() => setIsMobileConnectModalOpen(true)}
+        onToggleStageView={() => setIsStageViewOpen(true)}
+        onOpenHotkeys={() => setIsHotkeysModalOpen(true)}
+        canInstallPwa={Boolean(deferredPwaPrompt)}
+        onInstallPwa={handleInstallPwa}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-8">
-        {/* TAB 1: LIVE MATCH (المواجهة المباشرة + شاشة الألعاب المعتمدة + الترتيب العام) */}
+        {/* TAB 1: LIVE MATCH */}
         {activeTab === 'match' && (
           <div className="space-y-8 animate-fade-in">
             {/* Live Scoreboard Banner */}
@@ -406,38 +547,25 @@ export default function App() {
               onOpenBanPickTab={() => setActiveTab('arena')}
             />
 
-            {/* ARENA BATTLE BOARD (MATCHING SCREENSHOT 2026-09-23 AT 7.04.40 AM.png) */}
-            <div>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <h3 className="font-changa font-bold text-lg text-white flex items-center gap-2">
-                  <span>شاشة مواجهة الألعاب المعتمدة (Ban & Pick)</span>
-                  <span className="text-xs text-indigo-400 font-normal">
-                    (انقر على أي لعبة لتطبيق الحظر ✕ أو الاختيار)
-                  </span>
-                </h3>
-                <button
-                  onClick={() => setActiveTab('arena')}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold underline underline-offset-4"
-                >
-                  تكبير شاشة الألعاب
-                </button>
-              </div>
+            {/* Category Selector Grid */}
+            <CategoryPicker
+              categories={CATEGORIES}
+              selectedCategories={selectedCategories}
+              onToggleCategory={(catId) => {
+                const exists = selectedCategories.includes(catId);
+                let next: CategoryKey[];
+                if (exists) {
+                  if (selectedCategories.length <= 3) return;
+                  next = selectedCategories.filter((c) => c !== catId);
+                } else {
+                  next = [...selectedCategories, catId];
+                }
+                setSelectedCategories(next);
+                saveSelectedCategories(next);
+              }}
+            />
 
-              <ArenaBattleBoard
-                games={games}
-                categories={CATEGORIES}
-                cardStates={cardStates}
-                teamA={teamA}
-                teamB={teamB}
-                activeGameId={currentMatch.activeGameId}
-                onSetCardStatus={handleSetCardStatus}
-                onSetActiveGame={handleSetActiveGame}
-                onResetAllBansPicks={handleResetAllBansPicks}
-                onSaveGameRules={handleSaveGameRules}
-              />
-            </div>
-
-            {/* Standings Table directly on the main page under the scoreboard */}
+            {/* Standings Leaderboard Table */}
             <StandingsTable
               standings={standings}
               matchesHistory={matchesHistory}
@@ -447,7 +575,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: ARENA BATTLE BOARD FULLSCREEN VIEW (مطابقة للصورة 100%) */}
+        {/* TAB 2: ARENA BAN & PICK ENGINE */}
         {activeTab === 'arena' && (
           <div className="space-y-6 animate-fade-in">
             <ArenaBattleBoard
@@ -460,12 +588,11 @@ export default function App() {
               onSetCardStatus={handleSetCardStatus}
               onSetActiveGame={handleSetActiveGame}
               onResetAllBansPicks={handleResetAllBansPicks}
-              onSaveGameRules={handleSaveGameRules}
             />
           </div>
         )}
 
-        {/* TAB: GAMES VAULT MAP (خريطة مكتبة الألعاب الكوكبية) */}
+        {/* TAB 3: GAMES VAULT LIBRARY */}
         {activeTab === 'library' && (
           <div className="space-y-6 animate-fade-in">
             <GamesLibraryMap
@@ -480,7 +607,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: STANDINGS LEAGUE TABLE */}
+        {/* TAB 4: LEAGUE STANDINGS */}
         {activeTab === 'standings' && (
           <div className="space-y-6 animate-fade-in">
             <StandingsTable
@@ -527,11 +654,21 @@ export default function App() {
             <span>نظام الإدارة الميدانية والتحكيم للفرق الستة</span>
           </div>
           <div className="flex items-center gap-4 text-slate-400">
-            <span>نظام الدوري المستمر</span>
+            <button
+              onClick={() => setIsStageViewOpen(true)}
+              className="hover:text-amber-300 transition-colors flex items-center gap-1"
+            >
+              <span>وضع المسرح (B) 📺</span>
+            </button>
             <span>·</span>
-            <span>تحكم يدوي بدون استبعاد تلقائي</span>
+            <button
+              onClick={() => setIsHotkeysModalOpen(true)}
+              className="hover:text-cyan-300 transition-colors flex items-center gap-1"
+            >
+              <span>الاختصارات ⌨️</span>
+            </button>
             <span>·</span>
-            <span>مزامنة محلية فورية</span>
+            <span>Zero Latency & 60fps</span>
           </div>
         </div>
       </footer>
@@ -557,6 +694,39 @@ export default function App() {
         isOpen={isMobileConnectModalOpen}
         onClose={() => setIsMobileConnectModalOpen(false)}
         onOpenRemoteDirectly={() => setIsRemoteMode(true)}
+      />
+
+      {/* Arena Stage View for Audience & Projector (Clean Broadcast) */}
+      {isStageViewOpen && (
+        <ArenaStageView
+          currentMatch={currentMatch}
+          teams={teams}
+          games={games}
+          categories={CATEGORIES}
+          onClose={() => setIsStageViewOpen(false)}
+          onOpenHotkeys={() => setIsHotkeysModalOpen(true)}
+        />
+      )}
+
+      {/* Victory Celebration Modal */}
+      {isVictoryModalOpen && victoryWinner && victoryLoser && (
+        <VictoryModal
+          isOpen={isVictoryModalOpen}
+          onClose={() => setIsVictoryModalOpen(false)}
+          winnerTeam={victoryWinner}
+          loserTeam={victoryLoser}
+          currentMatch={currentMatch}
+          onNextMatch={() => {
+            setIsVictoryModalOpen(false);
+            handleResetCurrentMatch();
+          }}
+        />
+      )}
+
+      {/* Keyboard Hotkeys Modal Guide */}
+      <HotkeysModal
+        isOpen={isHotkeysModalOpen}
+        onClose={() => setIsHotkeysModalOpen(false)}
       />
     </div>
   );

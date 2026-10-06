@@ -326,7 +326,7 @@ export const BanPickEngine: React.FC<BanPickEngineProps> = ({
 
       {/* Floating Action Modal on clicking any game card */}
       {selectedGameForModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 animate-fade-in">
           <div className="bg-[#0C1226] border border-slate-700 rounded-2xl max-w-md w-full p-5 shadow-2xl relative text-right">
             {/* Close button */}
             <button
@@ -430,7 +430,7 @@ export const BanPickEngine: React.FC<BanPickEngineProps> = ({
 
       {/* Add Custom Game Modal */}
       {showAddGameModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 animate-fade-in">
           <form
             onSubmit={handleCreateNewGame}
             className="bg-[#0C1226] border border-slate-700 rounded-2xl max-w-md w-full p-5 shadow-2xl relative text-right"

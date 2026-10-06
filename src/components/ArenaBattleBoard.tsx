@@ -539,7 +539,7 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
 
       {/* Action Modal on clicking any card in the arena */}
       {selectedGameForModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in text-right">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 animate-fade-in text-right">
           <div className="bg-[#0C1226] border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
             <button
               onClick={() => setSelectedGameForModal(null)}
@@ -633,7 +633,7 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
 
       {/* UNIVERSAL LIBRARY VAULT PICKER MODAL (FOR ALL 5 CATEGORIES) */}
       {pickerTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fade-in text-right">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 animate-fade-in text-right">
           <div className="bg-[#0C1226] border border-indigo-500/50 rounded-3xl max-w-3xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setPickerTarget(null)}

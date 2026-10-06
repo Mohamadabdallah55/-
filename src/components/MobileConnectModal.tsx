@@ -123,7 +123,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
   const isUsingCustomDomain = Boolean(customDomain && customDomain.trim() !== '');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 animate-fade-in select-none">
       <div className="bg-[#0A0F24] border border-slate-700/80 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative text-right max-h-[92vh] overflow-y-auto">
         {/* Close Button */}
         <button

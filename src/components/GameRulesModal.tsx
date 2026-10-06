@@ -50,7 +50,7 @@ export const GameRulesModal: React.FC<GameRulesModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in text-right">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 animate-fade-in text-right">
       <div className="relative w-full max-w-lg bg-[#0C1024] border-2 border-slate-700/80 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden">
         {/* Glow */}
         <div

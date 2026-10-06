@@ -234,7 +234,7 @@ export const GamesLibraryMap: React.FC<GamesLibraryMapProps> = ({
 
       {/* Interactive Modal when clicking any game in the bank */}
       {selectedGame && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in text-right">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 animate-fade-in text-right">
           <div className="bg-[#0C1226] border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
             <button
               onClick={() => setSelectedGame(null)}

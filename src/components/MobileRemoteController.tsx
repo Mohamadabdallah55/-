@@ -141,7 +141,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   return (
     <div className="min-h-screen bg-[#060914] text-slate-100 flex flex-col font-cairo pb-24 select-none">
       {/* Top Mobile Bar */}
-      <header className="sticky top-0 z-50 bg-[#0A0F24]/95 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
+      <header className="sticky top-0 z-50 bg-[#0A0F24] border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-purple-600/30">
             <Smartphone className="w-4 h-4" />
@@ -541,7 +541,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
 
           {/* Modal to pick replacement game from library */}
           {editingGameSlot && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 animate-fade-in">
               <div className="bg-[#0C1226] border border-slate-700 rounded-3xl max-w-sm w-full p-4 text-right">
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
                   <h3 className="font-changa font-bold text-sm text-white">اختر لعبة بديلة لوضعها في الشاشة:</h3>

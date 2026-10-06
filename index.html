@@ -9,6 +9,13 @@
     <meta property="og:description" content="منصة دوري صراع النخبة (CLASH OF ELITES) لإدارة منافسات الفرق الستة، لوحة نتائج المباريات الحية، جدول الترتيب المباشر، ومحرك Ban & Pick للألعاب الخمسة." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#070B19" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="صراع النخبة" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Changa:wght@600;700;800&family=Orbitron:wght@600;700;800;900&display=swap" rel="stylesheet">
@@ -21,6 +28,13 @@
         var redirect = params.get('p');
         if (redirect) {
           window.history.replaceState(null, null, decodeURIComponent(redirect));
+        }
+
+        // Register Service Worker for PWA & offline arena functionality
+        if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+          window.addEventListener('load', function() {
+            navigator.serviceWorker.register('./sw.js').catch(function() {});
+          });
         }
       })();
     </script>
