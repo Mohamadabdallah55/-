@@ -3,6 +3,7 @@ import { CurrentMatch, Team, GameItem, CategoryInfo } from '../types';
 import { GameIcon } from './GameIcons';
 import { Plus, Minus, Trophy, CheckCircle2, RotateCcw, Play, Sparkles } from 'lucide-react';
 import { sound } from '../utils/audio';
+import { CountUpValue } from './CountUpValue';
 
 interface LiveScoreboardProps {
   currentMatch: CurrentMatch;
@@ -50,7 +51,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
   };
 
   return (
-    <div className="w-full bg-[#0C1226] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
+    <div className="match-card rb-match-glow w-full bg-[#0C1226] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
       {/* Background ambient lighting (hardware accelerated radial gradient) */}
       <div
         className="absolute -top-32 -left-32 w-80 h-80 rounded-full opacity-15 pointer-events-none transition-colors"
@@ -66,10 +67,10 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
       />
 
       {/* Top Controls: Team Selection & Status */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-800/60 text-xs text-slate-400">
+      <div className="match-meta flex flex-col sm:flex-row items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-800/60 text-xs text-slate-400">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-slate-300">مواجهة دوري صراع النخبة:</span>
-          <span className="bg-purple-900/40 text-purple-300 border border-purple-600/40 px-2.5 py-0.5 rounded-full font-medium">
+            <span className="format-chip bg-purple-900/40 text-purple-300 border border-purple-600/40 px-2.5 py-0.5 rounded-full font-medium">
             نظام Best of 5 (الفائز أول من يصل لـ 3 نقاط)
           </span>
         </div>
@@ -99,7 +100,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
       {/* Match Setup Selectors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Team A Picker */}
-        <div className="flex items-center gap-3 bg-slate-900/60 p-2.5 rounded-xl border border-purple-900/40">
+        <div className="team-picker flex items-center gap-3 bg-slate-900/60 p-2.5 rounded-xl border border-purple-900/40">
           <label className="text-xs text-purple-300 font-semibold whitespace-nowrap">الفريق الأول (الأرجواني):</label>
           <select
             value={currentMatch.teamAId}
@@ -115,7 +116,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
         </div>
 
         {/* Team B Picker */}
-        <div className="flex items-center gap-3 bg-slate-900/60 p-2.5 rounded-xl border border-cyan-900/40">
+        <div className="team-picker flex items-center gap-3 bg-slate-900/60 p-2.5 rounded-xl border border-cyan-900/40">
           <label className="text-xs text-cyan-300 font-semibold whitespace-nowrap">الفريق الثاني (السماوي):</label>
           <select
             value={currentMatch.teamBId}
@@ -134,18 +135,18 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
       {/* MAIN BROADCAST SCOREBOARD */}
       <div className="relative my-4">
         {/* Outer Banner */}
-        <div className="bg-[#050814] rounded-2xl md:rounded-full border-2 border-slate-700/80 shadow-[0_10px_35px_rgba(0,0,0,0.8)] p-2 md:p-3 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="score-stage bg-[#050814] rounded-2xl md:rounded-full border-2 border-slate-700/80 shadow-[0_10px_35px_rgba(0,0,0,0.8)] p-2 md:p-3 flex flex-col md:flex-row items-center justify-between gap-4">
           {/* Team A Block */}
           <div className="flex items-center gap-3 md:gap-5 w-full md:w-auto justify-between md:justify-start">
             {/* Score Pill A */}
             <div
-              className="w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl flex items-center justify-center text-3xl md:text-4xl font-extrabold font-orbitron text-white shadow-lg transition-transform hover:scale-105 shrink-0"
+              className="score-value w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl flex items-center justify-center text-3xl md:text-4xl font-extrabold font-orbitron text-white shadow-lg transition-transform hover:scale-105 shrink-0"
               style={{
                 backgroundColor: teamA?.color || '#A855F7',
                 boxShadow: `0 0 25px ${teamA?.color || '#A855F7'}60`,
               }}
             >
-              {currentMatch.teamAScore}
+              <CountUpValue value={currentMatch.teamAScore} />
             </div>
 
             {/* Team A Name & Crest */}
@@ -185,7 +186,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
           </div>
 
           {/* Center Hexagonal Emblem */}
-          <div className="relative flex flex-col items-center justify-center my-2 md:my-0">
+          <div className="versus-mark relative flex flex-col items-center justify-center my-2 md:my-0">
             <div className="relative">
               <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 p-0.5 shadow-[0_0_25px_rgba(99,102,241,0.5)]">
                 <div className="w-full h-full bg-[#070B19] rounded-[14px] flex flex-col items-center justify-center">
@@ -242,19 +243,19 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
 
             {/* Score Pill B */}
             <div
-              className="w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl flex items-center justify-center text-3xl md:text-4xl font-extrabold font-orbitron text-white shadow-lg transition-transform hover:scale-105 shrink-0"
+              className="score-value w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl flex items-center justify-center text-3xl md:text-4xl font-extrabold font-orbitron text-white shadow-lg transition-transform hover:scale-105 shrink-0"
               style={{
                 backgroundColor: teamB?.color || '#06B6D4',
                 boxShadow: `0 0 25px ${teamB?.color || '#06B6D4'}60`,
               }}
             >
-              {currentMatch.teamBScore}
+              <CountUpValue value={currentMatch.teamBScore} />
             </div>
           </div>
         </div>
 
         {/* 5-ROUNDS INTERACTIVE TIMELINE TRACKER */}
-        <div className="mt-4 p-3 rounded-2xl bg-[#070D1E] border border-slate-800">
+        <div className="round-track mt-4 p-3 rounded-2xl bg-[#070D1E] border border-slate-800">
           <div className="flex items-center justify-between mb-2 text-xs text-slate-400 font-changa">
             <span className="font-bold text-slate-300">مسار الجولات (Round Timeline):</span>
             <span className="text-[11px] font-mono text-amber-400">حسم 3 جولات = الفوز بالمباراة</span>
@@ -270,7 +271,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
               return (
                 <div
                   key={roundNum}
-                  className={`p-2.5 rounded-xl border text-center transition-all ${
+                  className={`round-cell ${isCurrent ? 'round-live' : ''} p-2.5 rounded-xl border text-center transition-all ${
                     isWonByA
                       ? 'bg-purple-950/80 border-purple-500 text-white shadow-sm'
                       : isWonByB

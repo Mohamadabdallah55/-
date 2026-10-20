@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { LeagueRow, MatchRecord } from '../types';
 import { GameIcon } from './GameIcons';
 import { Trophy, Medal, History, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { revealWithGsap } from '../utils/gsapMotion';
+import { SpotlightCard } from './SpotlightCard';
+import { CountUpValue } from './CountUpValue';
 
 interface StandingsTableProps {
   standings: LeagueRow[];
@@ -16,8 +19,15 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
   onOpenHistoryModal,
   onResetLeague,
 }) => {
+  const standingsRootRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => revealWithGsap(
+    standingsRootRef.current,
+    '.podium-place, .standing-row',
+    { y: 18, stagger: 0.055, duration: 0.62 },
+  ), [standings]);
+
   return (
-    <div className="w-full bg-[#0C1226]/80 border border-slate-800/80 rounded-2xl p-5 shadow-xl">
+    <div ref={standingsRootRef} className="standings-card w-full bg-[#0C1226]/80 border border-slate-800/80 rounded-2xl p-5 shadow-xl">
       {/* Table Header Area */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5 pb-3 border-b border-slate-800/80">
         <div>
@@ -52,6 +62,22 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
         </div>
       </div>
 
+      <div className="standings-podium" aria-label="المراكز الثلاثة الأولى">
+        {[1, 0, 2].map((standingIndex) => {
+          const row = standings[standingIndex];
+          if (!row) return null;
+          const rank = standingIndex + 1;
+          return <SpotlightCard key={row.teamId} className={`podium-place podium-rank-${rank}`}>
+            <span className="podium-rank">{rank === 1 ? '01 · البطل الحالي' : `0${rank} · المركز`}</span>
+            <span className="podium-team-mark" style={{ backgroundColor: row.team.color }}><GameIcon name={row.team.logo} /></span>
+            <strong>{row.team.name}</strong>
+            <small>{row.team.shortName}</small>
+            <span className="podium-points"><CountUpValue value={row.points} /><small> نقطة</small></span>
+            <span className="podium-record">{row.won} فوز <i /> {row.played} مباراة</span>
+          </SpotlightCard>;
+        })}
+      </div>
+
       {/* Standings Responsive Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-right text-sm">
@@ -79,7 +105,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
               return (
                 <tr
                   key={row.teamId}
-                  className={`hover:bg-slate-800/40 transition-colors ${
+                  className={`standing-row rank-row-${rank} hover:bg-slate-800/40 transition-colors ${
                     isFirst ? 'bg-amber-950/20' : ''
                   }`}
                 >
@@ -154,7 +180,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
 
                   {/* Points */}
                   <td className="py-3 px-4 text-center font-orbitron font-extrabold text-lg text-amber-300 tabular-nums">
-                    {row.points}
+                    <CountUpValue value={row.points} />
                   </td>
 
                   {/* Form */}

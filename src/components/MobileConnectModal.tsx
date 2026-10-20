@@ -29,33 +29,24 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
 }) => {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
-  const [customDomain, setCustomDomain] = useState<string>(() => {
-    try {
-      return localStorage.getItem('tahadi5_custom_domain') || '';
-    } catch {
-      return '';
-    }
-  });
+  // Never keep an old host override across deployments: the published host is the default.
+  const [customDomain, setCustomDomain] = useState<string>('');
   const [tempDomainInput, setTempDomainInput] = useState<string>('');
   const [connStatus, setConnStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const [clientCount, setClientCount] = useState<number>(0);
-
-  const roomCode = webrtcSync.getRoomCode();
+  const [roomCode, setRoomCode] = useState<string>(() => webrtcSync.getRoomCode());
 
   // Listen to live WebRTC connection status with Google STUN servers
   useEffect(() => {
     return webrtcSync.onStatusChange((status, count) => {
       setConnStatus(status);
       setClientCount(count);
+      setRoomCode(webrtcSync.getRoomCode());
     });
   }, []);
 
-  // Determine the effective base origin and subpath permanently
-  // Strictly matches: ${customDomain || window.location.origin}${window.location.pathname}
-  const getFullBase = () => {
-    if (customDomain && customDomain.trim() !== '') {
-      return customDomain.trim().replace(/\/+$/, '');
-    }
+  // Derive the deployed base path at runtime. This includes /<repo>/ on GitHub Pages.
+  const getCurrentDeploymentBase = () => {
     if (typeof window === 'undefined') return '';
     const origin = window.location.origin;
     const pathname = window.location.pathname
@@ -65,15 +56,14 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
     return `${origin}${pathname}`;
   };
 
-  const effectiveBase = getFullBase();
+  const effectiveBase = customDomain.trim().replace(/\/+$/, '') || getCurrentDeploymentBase();
 
-  // Formula strictly 100% compatible with GitHub Pages:
-  // ${customDomain || window.location.origin}${window.location.pathname}?mode=remote&room=${roomId}#remote
+  // This resolves to the active Vercel/custom-domain host or the GitHub Pages project path.
   const remoteUrl = `${effectiveBase}/?mode=remote&room=${roomCode}#remote`;
 
   useEffect(() => {
     if (isOpen) {
-      setTempDomainInput(customDomain || (typeof window !== 'undefined' ? window.location.origin : ''));
+      setTempDomainInput(customDomain || getCurrentDeploymentBase());
     }
   }, [isOpen, customDomain]);
 
@@ -109,9 +99,6 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
     }
     clean = clean.replace(/\/+$/, '');
 
-    try {
-      localStorage.setItem('tahadi5_custom_domain', clean);
-    } catch {}
     setCustomDomain(clean);
   };
 
@@ -121,12 +108,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
     } catch {}
     setCustomDomain('');
     if (typeof window !== 'undefined') {
-      const origin = window.location.origin;
-      const pathname = window.location.pathname
-        .replace(/\/index\.html$/, '')
-        .replace(/\/remote\/?$/, '')
-        .replace(/\/+$/, '');
-      setTempDomainInput(`${origin}${pathname}`);
+      setTempDomainInput(getCurrentDeploymentBase());
     }
   };
 
@@ -166,20 +148,20 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
           </div>
         </div>
 
-        {/* Permanent Custom Domain Configuration Box (Always Accessible) */}
+        {/* Current deployment URL is automatic; manual override is only for this session. */}
         <div className="mb-3 p-3 rounded-2xl bg-gradient-to-b from-[#0D1533] to-[#070B1A] border border-cyan-500/40 space-y-2 text-right">
           <div className="flex items-center justify-between">
             <span className="font-bold text-xs font-changa text-cyan-300 flex items-center gap-1.5">
               <Globe className="w-4 h-4 text-cyan-400" />
-              <span>تثبيت دومين GitHub الخاص بك:</span>
+              <span>رابط التحكم من الهاتف:</span>
             </span>
             {isUsingCustomDomain ? (
               <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
-                مثبت دائماً ✓
+                نطاق يدوي لهذه الجلسة
               </span>
             ) : (
               <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">
-                رابط المعاينة الحالي
+                يتبع رابط الموقع المنشور تلقائياً
               </span>
             )}
           </div>
@@ -188,7 +170,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             <input
               type="text"
               dir="ltr"
-              placeholder="https://username.github.io/repo أو https://my-league.com"
+              placeholder="اختياري: https://your-domain.com أو نطاق GitHub Pages"
               value={tempDomainInput}
               onChange={(e) => setTempDomainInput(e.target.value)}
               className="flex-1 bg-[#050814] border border-cyan-500/50 rounded-xl px-3 py-2 text-xs text-cyan-200 font-mono focus:outline-none focus:ring-2 focus:ring-cyan-400"
@@ -197,7 +179,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
               onClick={handleSaveCustomDomain}
               className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold font-changa text-xs shadow-md shrink-0"
             >
-              حفظ وتثبيت
+              تطبيق الرابط
             </button>
           </div>
 
@@ -210,10 +192,13 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
                 onClick={handleResetToCurrentOrigin}
                 className="text-rose-400 hover:text-rose-300 underline font-bold shrink-0 ml-2"
               >
-                إلغاء التثبيت
+              العودة لرابط الموقع الحالي
               </button>
             )}
           </div>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            الرابط يتبع عنوان النشر المفتوح تلقائياً، بما فيه مسار GitHub Pages. بعد ربط دومينك، افتح الموقع عليه وسيستخدمه الريموت تلقائياً.
+          </p>
         </div>
 
         {/* QR Code Container */}

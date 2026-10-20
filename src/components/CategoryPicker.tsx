@@ -15,7 +15,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
   onToggleCategory,
 }) => {
   return (
-    <div className="bg-[#0C1226]/80 border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-lg">
+    <div className="category-picker bg-[#0C1226]/80 border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-lg">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-800/60">
         <div>
           <h3 className="text-base font-bold font-changa text-white flex items-center gap-2">
@@ -39,7 +39,8 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <button
               key={cat.id}
               onClick={() => onToggleCategory(cat.id)}
-              className={`relative p-3.5 rounded-xl border text-right transition-all group flex flex-col justify-between min-h-[105px] ${
+              aria-pressed={isSelected}
+              className={`category-option rb-spring-hover relative p-3.5 rounded-xl border text-right transition-all group flex flex-col justify-between min-h-[105px] ${
                 isSelected
                   ? cat.id === '1v1' || cat.id === 'captains'
                     ? 'bg-rose-950/40 border-rose-500 shadow-md shadow-rose-500/20 ring-1 ring-rose-400'
@@ -52,7 +53,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
               {/* Checkbox indicator */}
               <div className="flex items-center justify-between w-full mb-2">
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  className="category-icon w-8 h-8 rounded-lg flex items-center justify-center"
                   style={{
                     backgroundColor: `${cat.accentColor}20`,
                     color: cat.accentColor,

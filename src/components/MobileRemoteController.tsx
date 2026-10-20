@@ -112,20 +112,6 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
     DEFAULT_ARENA_COLUMN_GAMES[selectedCategory] ||
     [];
 
-  if (
-    selectedCategory === '1v1' &&
-    (!activeColGameIds ||
-      activeColGameIds.length < 3 ||
-      activeColGameIds.includes('g-box-of-liars') ||
-      !activeColGameIds.includes('g-fatal-fury'))
-  ) {
-    activeColGameIds = DEFAULT_ARENA_COLUMN_GAMES['1v1'];
-  }
-
-  if (selectedCategory === 'fan_vote' && (!activeColGameIds || activeColGameIds.length < 3)) {
-    activeColGameIds = DEFAULT_ARENA_COLUMN_GAMES['fan_vote'];
-  }
-
   let currentCategoryGames = activeColGameIds
     .map((gId) => games.find((g) => g.id === gId) || DEFAULT_GAMES.find((g) => g.id === gId))
     .filter(Boolean) as GameItem[];
@@ -138,10 +124,9 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
     currentCategoryGames = [...currentCategoryGames, ...extra];
   }
 
-  // Spare games from this category (for swapping)
-  const categorySpareGames = games.filter(
-    (g) => g.categoryId === selectedCategory && !activeColGameIds.includes(g.id)
-  );
+  // Let the phone choose replacements from the whole library. Some categories
+  // (especially 1v1 and fan vote) contain only the three currently displayed games.
+  const categorySpareGames = games.filter((g) => !activeColGameIds.includes(g.id));
 
   const handleResetCardsFromPhone = () => {
     sound.playTick();
@@ -156,9 +141,9 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#060914] text-slate-100 flex flex-col font-cairo pb-24 select-none">
+    <div className="mobile-remote-shell min-h-screen bg-[#060914] text-slate-100 flex flex-col font-cairo pb-24 select-none">
       {/* Top Mobile Bar */}
-      <header className="sticky top-0 z-50 bg-[#0A0F24] border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
+      <header className="remote-header sticky top-0 z-50 bg-[#0A0F24] border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-purple-600/30">
             <Smartphone className="w-4 h-4" />
@@ -199,7 +184,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
       </header>
 
       {/* Screen Director Remote Bar (توجيه شاشة اللابتوب عن بُعد) */}
-      <div className="p-3 bg-[#070B1E] border-b border-indigo-900/50">
+      <div className="remote-director p-3 bg-[#070B1E] border-b border-indigo-900/50">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
             <Tv className="w-3.5 h-3.5 text-cyan-400" />
@@ -275,14 +260,14 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
 
       {/* Instant Action Feedback Toast */}
       {remoteFeedback && (
-        <div className="p-2.5 bg-emerald-950/95 border-b border-emerald-500 text-emerald-200 text-xs font-bold text-center animate-fade-in flex items-center justify-center gap-2 shadow-lg">
+        <div className="remote-feedback p-2.5 bg-emerald-950/95 border-b border-emerald-500 text-emerald-200 text-xs font-bold text-center animate-fade-in flex items-center justify-center gap-2 shadow-lg">
           <Sparkles className="w-4 h-4 text-emerald-400" />
           <span>{remoteFeedback}</span>
         </div>
       )}
 
       {/* Main Remote Navigation Switcher */}
-      <div className="p-3 bg-[#0A0F24]/60 border-b border-slate-800 flex items-center justify-around gap-1">
+      <div className="remote-tabs p-3 bg-[#0A0F24]/60 border-b border-slate-800 flex items-center justify-around gap-1">
         <button
           onClick={() => {
             sound.playTick();
@@ -316,7 +301,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
 
       {/* TAB 1: REMOTE GAMES & BAN/PICK & REVEAL CONTROLS */}
       {activeRemoteTab === 'games' && (
-        <div className="p-4 space-y-4">
+        <div className="remote-content p-4 space-y-4">
           {/* Quick Global Action Buttons (Reset Cards & Restore Defaults) */}
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -583,7 +568,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
 
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {categorySpareGames.length === 0 ? (
-                    <p className="text-xs text-slate-400 text-center py-4">لا توجد ألعاب احتياطية أخرى في هذه الفئة.</p>
+                    <p className="text-xs text-slate-400 text-center py-4">لا توجد ألعاب بديلة غير مستخدمة.</p>
                   ) : (
                     categorySpareGames.map((spare) => (
                       <button
@@ -618,7 +603,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
 
       {/* TAB 2: REMOTE SCORE & TEAMS & MATCH FINISH */}
       {activeRemoteTab === 'score' && (
-        <div className="p-4 space-y-4">
+        <div className="remote-content remote-score-content p-4 space-y-4">
           {/* Team Selectors */}
           <div className="grid grid-cols-2 gap-2">
             <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-900/60">

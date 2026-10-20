@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
+import { Gamepad2, Trophy, UsersRound } from 'lucide-react';
 import {
   Team,
   CurrentMatch,
@@ -31,6 +32,7 @@ import {
   subscribeToBroadcast,
   loadArenaColumnGames,
   saveArenaColumnGames,
+  DEFAULT_ARENA_COLUMN_GAMES,
 } from './utils/storage';
 import { sound } from './utils/audio';
 import { Header } from './components/Header';
@@ -48,6 +50,29 @@ import { MobileConnectModal } from './components/MobileConnectModal';
 import { ArenaStageView } from './components/ArenaStageView';
 import { VictoryModal } from './components/VictoryModal';
 import { HotkeysModal } from './components/HotkeysModal';
+import { SpotlightCard } from './components/SpotlightCard';
+import { CountUpValue } from './components/CountUpValue';
+
+declare global {
+  interface Window {
+    Lenis?: new (options: {
+      autoRaf: boolean;
+      smoothWheel: boolean;
+      syncTouch: boolean;
+      allowNestedScroll: boolean;
+      anchors: boolean;
+    }) => { destroy: () => void };
+  }
+}
+
+const PAGE_COPY = {
+  match: { title: 'مركز المنافسة', eyebrow: 'MATCH CONTROL', description: 'كل ما تحتاجه لإدارة المواجهة الحالية من مكان واحد.' },
+  arena: { title: 'اختيار المواجهة', eyebrow: 'BAN & PICK ARENA', description: 'شكّل قائمة الألعاب واحسم خيارات الجولة مع الفريقين.' },
+  standings: { title: 'سباق الصدارة', eyebrow: 'LEAGUE TABLE', description: 'تابع ترتيب الفرق ونقاطها وسجل مواجهات الموسم.' },
+  library: { title: 'أرشيف الألعاب', eyebrow: 'GAME ARCHIVE', description: 'استكشف الألعاب المعتمدة ضمن فئات الدوري.' },
+  timer: { title: 'المؤقت الميداني', eyebrow: 'FIELD TIMER', description: 'أدوات توقيت مستقلة للتحديات والجولات المباشرة.' },
+  broadcast: { title: 'مركز البث', eyebrow: 'BROADCAST STUDIO', description: 'جهّز شاشة العرض للجمهور والبث المباشر.' },
+};
 
 export default function App() {
   // Check if opened as standalone window via URL hash #standalone-timer or #remote / /remote / ?mode=remote
@@ -74,6 +99,22 @@ export default function App() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
+
+  // Enhance desktop and tablet page scrolling when Lenis is available.
+  // Native scrolling remains the fallback, including offline and reduced-motion modes.
+  useEffect(() => {
+    if (isStandaloneTimer || isRemoteMode) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !window.Lenis) return;
+
+    const lenis = new window.Lenis({
+      autoRaf: true,
+      smoothWheel: true,
+      syncTouch: false,
+      allowNestedScroll: true,
+      anchors: true,
+    });
+    return () => lenis.destroy();
+  }, [isStandaloneTimer, isRemoteMode]);
 
   const handleInstallPwa = () => {
     if (deferredPwaPrompt) {
@@ -271,8 +312,11 @@ export default function App() {
 
   // Column game swap handler (from phone or PC)
   const handleChangeColumnGame = (categoryId: string, slotIndex: number, newGameId: string) => {
+    if (slotIndex < 0 || slotIndex > 2 || !newGameId) return;
     const next = { ...arenaColumnGames };
-    const currentList = [...(next[categoryId] || [])];
+    const currentList = [
+      ...(next[categoryId] || DEFAULT_ARENA_COLUMN_GAMES[categoryId] || []),
+    ];
     currentList[slotIndex] = newGameId;
     next[categoryId] = currentList;
     setArenaColumnGames(next);
@@ -510,9 +554,12 @@ export default function App() {
     );
   }
 
+  const page = PAGE_COPY[activeTab];
+  const today = new Date().toLocaleDateString('ar-JO', { weekday: 'long', day: 'numeric', month: 'long' });
+
   return (
     <div
-      className={`min-h-screen bg-[#070B19] text-slate-100 flex flex-col font-cairo transition-transform ${
+      className={`site-app min-h-screen font-cairo transition-transform ${
         isScreenShaking ? 'animate-screen-shake' : ''
       }`}
     >
@@ -529,11 +576,36 @@ export default function App() {
         onInstallPwa={handleInstallPwa}
       />
 
+      <div className="site-workspace">
+      <div className="workspace-topbar">
+        <div className="workspace-breadcrumb"><span className="breadcrumb-mark">CE</span><span>الموسم الأول</span><i /> <strong>{page.eyebrow}</strong></div>
+        <div className="workspace-meta"><span className="workspace-live"><i /> مباشر</span><span className="workspace-date">{today}</span><span className="workspace-round">الجولة <b>01</b></span></div>
+      </div>
+
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-8">
+      <main className="site-main flex-1 w-full">
+        <section className={`page-heading page-heading-${activeTab}`}>
+          <div className="page-heading-copy">
+            <div className="page-eyebrow"><span />{page.eyebrow}<span className="eyebrow-rule" /></div>
+            <h1>{page.title}</h1>
+            <p>{page.description}</p>
+          </div>
+          <div className="page-heading-stamp"><span>CLASH</span><strong>01</strong><small>ELITE LEAGUE</small></div>
+        </section>
+
+        {activeTab === 'match' && (
+          <div className="overview-stats">
+            <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-lime"><Trophy /></span><small>مباريات مكتملة</small><strong><CountUpValue value={matchesHistory.length} padTo={2} /></strong><span>هذا الموسم</span></SpotlightCard>
+            <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-blue"><UsersRound /></span><small>الفرق المتنافسة</small><strong><CountUpValue value={teams.length} padTo={2} /></strong><span>فريق مسجل</span></SpotlightCard>
+            <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-orange"><Gamepad2 /></span><small>الألعاب المعتمدة</small><strong><CountUpValue value={games.length} padTo={2} /></strong><span>ضمن المكتبة</span></SpotlightCard>
+            <SpotlightCard className="overview-stat overview-stat-feature"><span className="overview-stat-kicker">الجولة الحالية</span><strong><CountUpValue value={currentMatch.teamAScore + currentMatch.teamBScore + 1} padTo={2} /> <small>/ 05</small></strong><span>أفضل خمس جولات</span></SpotlightCard>
+          </div>
+        )}
+
+        <div className="tab-content">
         {/* TAB 1: LIVE MATCH */}
         {activeTab === 'match' && (
-          <div className="space-y-8 animate-fade-in">
+          <div className="page-section page-section-match space-y-8 animate-fade-in">
             {/* Live Scoreboard Banner */}
             <LiveScoreboard
               currentMatch={currentMatch}
@@ -577,7 +649,7 @@ export default function App() {
 
         {/* TAB 2: ARENA BAN & PICK ENGINE */}
         {activeTab === 'arena' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="page-section page-section-arena space-y-6 animate-fade-in">
             <ArenaBattleBoard
               games={games}
               categories={CATEGORIES}
@@ -594,7 +666,7 @@ export default function App() {
 
         {/* TAB 3: GAMES VAULT LIBRARY */}
         {activeTab === 'library' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="page-section page-section-library space-y-6 animate-fade-in">
             <GamesLibraryMap
               games={games}
               cardStates={cardStates}
@@ -609,7 +681,7 @@ export default function App() {
 
         {/* TAB 4: LEAGUE STANDINGS */}
         {activeTab === 'standings' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="page-section page-section-standings space-y-6 animate-fade-in">
             <StandingsTable
               standings={standings}
               matchesHistory={matchesHistory}
@@ -621,7 +693,7 @@ export default function App() {
 
         {/* TAB: DEDICATED DUAL TIMER */}
         {activeTab === 'timer' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="page-section page-section-timer space-y-6 animate-fade-in">
             <DualTimer
               teamA={teamA}
               teamB={teamB}
@@ -643,10 +715,11 @@ export default function App() {
             onClose={() => setActiveTab('match')}
           />
         )}
+        </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-[#050814] py-6 px-4 text-center text-xs text-slate-500">
+      <footer className="site-footer border-t border-slate-800/80 bg-[#050814] py-6 px-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-changa font-bold text-amber-300">دوري صراع النخبة (CLASH OF ELITES)</span>
@@ -672,6 +745,7 @@ export default function App() {
           </div>
         </div>
       </footer>
+      </div>
 
       {/* Teams Customization Modal */}
       <TeamsModal

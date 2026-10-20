@@ -169,6 +169,10 @@ if (typeof window !== 'undefined') {
       if (history) fullState['HISTORY_UPDATED'] = JSON.parse(history);
       const cards = localStorage.getItem(STORAGE_KEYS.CARD_STATES);
       if (cards) fullState['CARDS_UPDATED'] = JSON.parse(cards);
+      const games = localStorage.getItem(STORAGE_KEYS.GAMES);
+      if (games) fullState['GAMES_UPDATED'] = JSON.parse(games);
+      const categories = localStorage.getItem(STORAGE_KEYS.SELECTED_CATEGORIES);
+      if (categories) fullState['CATEGORIES_UPDATED'] = JSON.parse(categories);
       const arena = localStorage.getItem(STORAGE_KEYS.ARENA_COLUMN_GAMES);
       if (arena) fullState['ARENA_GAMES_UPDATED'] = JSON.parse(arena);
     } catch {}
@@ -464,25 +468,23 @@ export function loadArenaColumnGames(): Record<string, string[]> {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.ARENA_COLUMN_GAMES);
     if (raw) {
-      const parsed = JSON.parse(raw);
-      // Clean check: if each of the 5 categories has exactly 3 games
-      const v1v1 = parsed['1v1'] || parsed.captains;
-      const is1v1Valid = v1v1 && v1v1.length === 3 && v1v1.includes('g-fatal-fury');
-      const isFanVoteValid = parsed.fan_vote && parsed.fan_vote.length === 3;
-      if (
-        parsed.digital?.length === 3 &&
-        parsed.mental?.length === 3 &&
-        parsed.physical?.length === 3 &&
-        is1v1Valid &&
-        isFanVoteValid &&
-        !JSON.stringify(parsed).includes('g-tricky-towers')
-      ) {
-        parsed['1v1'] = v1v1;
-        return parsed;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const categories = ['digital', 'mental', 'physical', '1v1', 'fan_vote'];
+      const normalized: Record<string, string[]> = {};
+      for (const category of categories) {
+        const defaultSlots = DEFAULT_ARENA_COLUMN_GAMES[category] || [];
+        const savedSlots = parsed[category] || (category === '1v1' ? parsed.captains : undefined);
+        const validSavedSlots = Array.isArray(savedSlots)
+          ? savedSlots.filter((id): id is string => typeof id === 'string' && id.length > 0).slice(0, 3)
+          : [];
+        normalized[category] = [0, 1, 2].map((index) => validSavedSlots[index] || defaultSlots[index]);
       }
+      return normalized;
     }
   } catch {}
-  localStorage.setItem(STORAGE_KEYS.ARENA_COLUMN_GAMES, JSON.stringify(DEFAULT_ARENA_COLUMN_GAMES));
+  try {
+    localStorage.setItem(STORAGE_KEYS.ARENA_COLUMN_GAMES, JSON.stringify(DEFAULT_ARENA_COLUMN_GAMES));
+  } catch {}
   return DEFAULT_ARENA_COLUMN_GAMES;
 }
 
@@ -492,4 +494,3 @@ export function saveArenaColumnGames(gamesMap: Record<string, string[]>) {
     broadcastMessage('ARENA_GAMES_UPDATED', gamesMap);
   } catch {}
 }
-

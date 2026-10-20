@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
   Play,
   Pause,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { sound } from '../utils/audio';
 import { Team } from '../types';
+import { revealWithGsap } from '../utils/gsapMotion';
 
 interface DualTimerProps {
   teamA?: Team;
@@ -87,6 +88,12 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [expandedTimer, setExpandedTimer] = useState<'none' | 'countdown' | 'stopwatch'>('none');
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => revealWithGsap(containerRef.current, '.timer-countdown-card, .timer-duel-card', {
+    y: 30,
+    stagger: 0.16,
+    duration: 0.82,
+  }), []);
 
   // Countdown Interval Ref (clean, does NOT trigger on countdownLeft)
   useEffect(() => {
@@ -211,12 +218,22 @@ export const DualTimer: React.FC<DualTimerProps> = ({
     setExpandedTimer,
   };
 
-  // Keyboard Dual Battle Listeners (Team A = 'A', Team B = 'L' or 'Enter', ESC = close fullscreen)
+  // Keyboard Dual Battle Listeners (Team A = 'A', Team B = 'L', ESC = close fullscreen)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger if user is typing in an input
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable ||
+        Boolean(target.closest('button, a, select, [role="button"]'))
+      )) {
+        return;
+      }
+      if (activeElement && activeElement !== document.body && activeElement !== document.documentElement) {
         return;
       }
 
@@ -232,8 +249,8 @@ export const DualTimer: React.FC<DualTimerProps> = ({
         return;
       }
 
-      // Team B Duel Key: 'l', 'L', Arabic 'م', or 'Enter'
-      if (e.key === 'l' || e.key === 'L' || e.key === 'م' || e.key === 'Enter') {
+      // Team B Duel Key: 'l', 'L', or Arabic 'م'. Enter stays available to app navigation.
+      if (e.key === 'l' || e.key === 'L' || e.key === 'م') {
         e.preventDefault();
         duelStateRef.current.handleToggleTeamB();
         return;
@@ -293,7 +310,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`w-full ${
+      className={`field-timer w-full ${
         isStandalone ? 'min-h-screen bg-[#070B19] p-4 sm:p-8' : ''
       }`}
     >
@@ -339,10 +356,10 @@ export const DualTimer: React.FC<DualTimerProps> = ({
       )}
 
       {/* DUAL TIMERS GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="timer-dashboard grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* 1. COUNTDOWN TIMER CARD */}
-        <div className="bg-[#0C1226]/90 border border-slate-800/90 rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col justify-between">
+        <div className="timer-countdown-card bg-[#0C1226]/90 border border-slate-800/90 rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 text-purple-400">
               <Timer className="w-6 h-6" />
@@ -380,7 +397,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
           {/* Big Digital Display */}
           <div className="my-6 text-center">
             <div
-              className={`font-orbitron font-black text-6xl sm:text-8xl md:text-9xl tracking-wider py-6 px-4 rounded-3xl border-2 transition-all ${
+              className={`countdown-display font-orbitron font-black text-6xl sm:text-8xl md:text-9xl tracking-wider py-6 px-4 rounded-3xl border-2 transition-all ${
                 countdownLeft <= 5 && countdownLeft > 0
                   ? 'bg-rose-950/40 border-rose-500 text-rose-400 shadow-[0_0_50px_rgba(244,63,94,0.4)] animate-pulse'
                   : countdownLeft === 0
@@ -492,7 +509,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
         </div>
 
         {/* 2. STOP THE TIMER CHALLENGE CARD */}
-        <div className="bg-[#0C1226]/90 border border-slate-800/90 rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col justify-between">
+        <div className="timer-duel-card bg-[#0C1226]/90 border border-slate-800/90 rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col justify-between">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
@@ -520,7 +537,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
           </div>
 
           {/* TARGET SECONDS & BLIND CHALLENGE CONFIG BAR */}
-          <div className="mb-6 p-4 rounded-2xl bg-[#070B1E] border border-cyan-900/60 flex flex-col lg:flex-row items-center justify-between gap-4">
+          <div className="timer-target-panel mb-6 p-4 rounded-2xl bg-[#070B1E] border border-cyan-900/60 flex flex-col lg:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1.5 text-amber-300 font-bold font-changa text-xs sm:text-sm">
                 <Target className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
@@ -627,7 +644,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
           )}
 
           {/* SIMULTANEOUS DUAL LAUNCH & KEYBOARD GUIDE BAR */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-cyan-950/40 border border-slate-700/80 mb-6">
+          <div className="timer-launch-panel flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-cyan-950/40 border border-slate-700/80 mb-6">
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
@@ -655,7 +672,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
               <span className="text-amber-400 font-bold">🎮 اللعب معاً بنفس اللحظة:</span>
               <span>فريق 1: مفتاح <kbd className="px-1.5 py-0.5 rounded bg-purple-900 border border-purple-500 text-white font-mono font-bold">A</kbd></span>
               <span className="text-slate-500">|</span>
-              <span>فريق 2: مفتاح <kbd className="px-1.5 py-0.5 rounded bg-cyan-900 border border-cyan-500 text-white font-mono font-bold">L</kbd> أو <kbd className="px-1.5 py-0.5 rounded bg-cyan-900 border border-cyan-500 text-white font-mono font-bold">Enter</kbd></span>
+              <span>فريق 2: مفتاح <kbd className="px-1.5 py-0.5 rounded bg-cyan-900 border border-cyan-500 text-white font-mono font-bold">L</kbd></span>
             </div>
           </div>
 
@@ -688,7 +705,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
                   e.preventDefault();
                   handleToggleTeamA();
                 }}
-                className={`w-48 h-48 sm:w-56 sm:h-56 md:w-60 md:h-60 rounded-full border-4 sm:border-[6px] shadow-2xl transition-all duration-150 active:scale-90 flex flex-col items-center justify-center p-3 select-none relative cursor-pointer ${
+                className={`stopwatch-team-button stopwatch-team-a w-48 h-48 sm:w-56 sm:h-56 md:w-60 md:h-60 rounded-full border-4 sm:border-[6px] shadow-2xl transition-all duration-150 active:scale-90 flex flex-col items-center justify-center p-3 select-none relative cursor-pointer ${
                   teamAActive
                     ? 'bg-rose-950/90 border-rose-500 shadow-[0_0_50px_rgba(244,63,94,0.7)] animate-pulse ring-8 ring-rose-500/20'
                     : teamAFinished
@@ -782,7 +799,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
                   e.preventDefault();
                   handleToggleTeamB();
                 }}
-                className={`w-48 h-48 sm:w-56 sm:h-56 md:w-60 md:h-60 rounded-full border-4 sm:border-[6px] shadow-2xl transition-all duration-150 active:scale-90 flex flex-col items-center justify-center p-3 select-none relative cursor-pointer ${
+                className={`stopwatch-team-button stopwatch-team-b w-48 h-48 sm:w-56 sm:h-56 md:w-60 md:h-60 rounded-full border-4 sm:border-[6px] shadow-2xl transition-all duration-150 active:scale-90 flex flex-col items-center justify-center p-3 select-none relative cursor-pointer ${
                   teamBActive
                     ? 'bg-rose-950/90 border-rose-500 shadow-[0_0_50px_rgba(244,63,94,0.7)] animate-pulse ring-8 ring-rose-500/20'
                     : teamBFinished
@@ -845,7 +862,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
 
               {/* Keyboard Cue Badge */}
               <div className="text-[11px] text-cyan-300 font-mono font-bold bg-cyan-950/70 px-3 py-1 rounded-full border border-cyan-800/80 shadow">
-                ⌨️ اضغط مفتاح [ L أو Enter ] للبدء/الإيقاف
+                ⌨️ اضغط مفتاح [ L ] للبدء/الإيقاف
               </div>
             </div>
           </div>
@@ -1172,7 +1189,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
                 <span className="text-amber-400 font-bold">🎮 اللعب معاً بالكيبورد:</span>
                 <span>فريق 1: مفتاح <kbd className="px-1.5 py-0.5 rounded bg-purple-900 border border-purple-500 text-white font-mono font-bold">A</kbd></span>
                 <span className="text-slate-500">|</span>
-                <span>فريق 2: مفتاح <kbd className="px-1.5 py-0.5 rounded bg-cyan-900 border border-cyan-500 text-white font-mono font-bold">L</kbd> أو <kbd className="px-1.5 py-0.5 rounded bg-cyan-900 border border-cyan-500 text-white font-mono font-bold">Enter</kbd></span>
+                <span>فريق 2: مفتاح <kbd className="px-1.5 py-0.5 rounded bg-cyan-900 border border-cyan-500 text-white font-mono font-bold">L</kbd></span>
               </div>
             </div>
 
@@ -1360,7 +1377,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
 
                 {/* Keyboard Cue Badge */}
                 <div className="text-xs text-cyan-300 font-mono font-bold bg-cyan-950/80 px-3 py-1 rounded-full border border-cyan-800 shadow">
-                  ⌨️ اضغط مفتاح [ L أو Enter ] للبدء/الإيقاف
+                  ⌨️ اضغط مفتاح [ L ] للبدء/الإيقاف
                 </div>
               </div>
             </div>

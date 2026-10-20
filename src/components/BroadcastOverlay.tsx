@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { CurrentMatch, Team, GameItem, LeagueRow, CategoryInfo, BanPickStatus } from '../types';
 import { DEFAULT_GAMES } from '../data/defaultGames';
 import { GameIcon } from './GameIcons';
+import { BrandMark } from './BrandMark';
 import { subscribeToBroadcast, DEFAULT_ARENA_COLUMN_GAMES } from '../utils/storage';
+import { revealWithGsap } from '../utils/gsapMotion';
 import {
   Trophy,
   Maximize2,
@@ -38,6 +40,13 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [broadcastView, setBroadcastView] = useState<'scoreboard' | 'games'>('scoreboard');
+  const broadcastRootRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => revealWithGsap(
+    broadcastRootRef.current,
+    broadcastView === 'games' ? '.broadcast-column' : '.broadcast-match-card, .broadcast-round-track',
+    { y: 26, stagger: broadcastView === 'games' ? 0.09 : 0.14, duration: 0.78 },
+  ), [broadcastView]);
 
   // Real-time listener from phone commands
   useEffect(() => {
@@ -94,13 +103,6 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
       glowColor: 'rgba(249, 115, 22, 0.5)',
     },
     {
-      catId: '1v1',
-      label: '1V1',
-      subLabel: 'تحدي الكباتن',
-      headerColor: '#EF4444',
-      glowColor: 'rgba(239, 68, 68, 0.6)',
-    },
-    {
       catId: 'fan_vote',
       label: 'FAN VOTE',
       subLabel: 'تصويت الجمهور',
@@ -108,16 +110,21 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
       glowColor: 'rgba(236, 72, 153, 0.6)',
       isFanVote: true,
     },
+    {
+      catId: '1v1',
+      label: '1V1',
+      subLabel: 'تحدي الكباتن',
+      headerColor: '#d8f27a',
+      glowColor: 'rgba(216, 242, 122, 0.55)',
+    },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#050814] text-white flex flex-col justify-between p-4 md:p-8 select-none overflow-y-auto">
+    <div ref={broadcastRootRef} className="broadcast-screen fixed inset-0 z-50 bg-[#050814] text-white flex flex-col justify-between p-4 md:p-8 select-none overflow-y-auto">
       {/* Top TV Header Bar */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+      <div className="broadcast-topbar flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-purple-600 to-indigo-600 flex items-center justify-center font-orbitron font-extrabold text-lg md:text-xl text-white shadow-lg shadow-purple-500/30">
-            CE
-          </div>
+          <div className="broadcast-brand w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center p-1"><BrandMark /></div>
           <div>
             <h1 className="text-xl md:text-2xl font-black font-changa tracking-wide uppercase text-white">
               دوري صراع النخبة · LIVE BROADCAST
@@ -174,7 +181,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
 
       {/* VIEW 1: SCOREBOARD VIEW */}
       {broadcastView === 'scoreboard' && (
-        <div className="my-auto max-w-5xl mx-auto w-full space-y-6 animate-fade-in">
+        <div className="broadcast-scoreboard my-auto max-w-5xl mx-auto w-full space-y-6 animate-fade-in">
           {/* Active Game Spotlight */}
           {activeGame && (
             <div className="text-center animate-fade-in">
@@ -189,7 +196,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
           )}
 
           {/* Big Match Score Bar */}
-          <div className="bg-[#070B19] rounded-3xl border-2 border-slate-700 shadow-[0_15px_50px_rgba(0,0,0,0.9)] p-4 md:p-6 flex items-center justify-between gap-6 relative">
+          <div className="broadcast-match-card bg-[#070B19] rounded-3xl border-2 border-slate-700 shadow-[0_15px_50px_rgba(0,0,0,0.9)] p-4 md:p-6 flex items-center justify-between gap-6 relative">
             {/* Team A */}
             <div className="flex items-center gap-4 md:gap-6">
               <div
@@ -247,7 +254,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
           </div>
 
           {/* Best of 5 Rounds Track */}
-          <div className="flex items-center justify-center gap-2 md:gap-3">
+          <div className="broadcast-round-track flex items-center justify-center gap-2 md:gap-3">
             {[1, 2, 3, 4, 5].map((roundNum) => {
               const totalRoundsPlayed = currentMatch.teamAScore + currentMatch.teamBScore;
               const isWonByA = roundNum <= currentMatch.teamAScore;
@@ -277,27 +284,13 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
 
       {/* VIEW 2: ARENA GAMES GRID VIEW (BAN & PICK STAGE ON BROADCAST) */}
       {broadcastView === 'games' && (
-        <div className="my-auto max-w-7xl mx-auto w-full py-2 animate-fade-in">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="broadcast-games-view my-auto max-w-7xl mx-auto w-full py-2 animate-fade-in">
+          <div className="broadcast-columns grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {arenaColumns.map((col) => {
               let configuredKeys =
                 arenaColumnGames[col.catId] ||
                 DEFAULT_ARENA_COLUMN_GAMES[col.catId] ||
                 [];
-
-              if (
-                col.catId === '1v1' &&
-                (!configuredKeys ||
-                  configuredKeys.length < 3 ||
-                  configuredKeys.includes('g-box-of-liars') ||
-                  !configuredKeys.includes('g-fatal-fury'))
-              ) {
-                configuredKeys = DEFAULT_ARENA_COLUMN_GAMES['1v1'];
-              }
-
-              if (col.catId === 'fan_vote' && (!configuredKeys || configuredKeys.length < 3)) {
-                configuredKeys = DEFAULT_ARENA_COLUMN_GAMES['fan_vote'];
-              }
 
               let colGames = configuredKeys
                 .map((key) => games.find((g) => g.id === key) || DEFAULT_GAMES.find((g) => g.id === key))
@@ -314,11 +307,11 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
               return (
                 <div
                   key={col.catId}
-                  className="rounded-2xl bg-[#090D24]/90 border border-slate-800 p-2.5 flex flex-col justify-between shadow-xl relative overflow-hidden"
+                  className="broadcast-column rounded-2xl bg-[#090D24]/90 border border-slate-800 p-2.5 flex flex-col justify-between shadow-xl relative overflow-hidden"
                 >
                   {/* Category Header */}
                   <div
-                    className="p-2 rounded-xl text-center mb-3 border"
+                    className="broadcast-column-heading p-2 rounded-xl text-center mb-3 border"
                     style={{
                       borderColor: `${col.headerColor}60`,
                       background: `linear-gradient(180deg, ${col.headerColor}25 0%, rgba(10,13,36,0.8) 100%)`,
@@ -345,7 +338,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
                       return (
                         <div
                           key={game.id}
-                          className={`p-2.5 rounded-xl border transition-all relative ${
+                          className={`broadcast-game-row p-2.5 rounded-xl border transition-all relative ${
                             isCurrent
                               ? 'bg-cyan-950/80 border-cyan-400 shadow-[0_0_25px_rgba(6,182,212,0.5)] ring-2 ring-cyan-400'
                               : isBannedA || isBannedB
@@ -419,7 +412,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
       )}
 
       {/* Bottom Leaderboard Strip */}
-      <div className="bg-[#0C1226]/80 rounded-2xl p-3 border border-slate-800/80 mt-4">
+      <div className="broadcast-leaderboard bg-[#0C1226]/80 rounded-2xl p-3 border border-slate-800/80 mt-4">
         <div className="text-[11px] text-slate-400 font-semibold mb-1.5 flex items-center gap-1.5">
           <Trophy className="w-3 h-3 text-amber-400" />
           <span>ترتيب دوري صراع النخبة المباشر:</span>
@@ -428,7 +421,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
           {standings.map((row, idx) => (
             <div
               key={row.teamId}
-              className="p-1.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-[11px]"
+              className={`broadcast-standing p-1.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-[11px] rank-${idx + 1}`}
             >
               <div className="flex items-center gap-1.5">
                 <span className="font-mono text-slate-500 font-bold">#{idx + 1}</span>

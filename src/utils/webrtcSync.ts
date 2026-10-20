@@ -39,7 +39,8 @@ class WebRTCSyncManager {
       window.location.hash === '#remote' ||
       window.location.pathname.startsWith('/remote') ||
       params.get('mode') === 'remote' ||
-      params.get('remote') === 'true';
+      params.get('remote') === 'true' ||
+      params.get('tab') === 'remote';
 
     if (roomFromUrl) {
       this.roomCode = roomFromUrl.toUpperCase();
@@ -85,11 +86,12 @@ class WebRTCSyncManager {
   }
 
   public setRoomCode(newRoomCode: string) {
-    this.roomCode = newRoomCode.toUpperCase().trim();
+    this.roomCode = newRoomCode.toUpperCase().trim().replace(/[^A-Z0-9-]/g, '');
     localStorage.setItem('tahadi5_host_room', this.roomCode);
     localStorage.setItem('tahadi5_active_room', this.roomCode);
     this.cleanup();
     this.initPeer();
+    this.startHeartbeat();
   }
 
   public onStatusChange(handler: StatusHandler): () => void {
@@ -129,12 +131,18 @@ class WebRTCSyncManager {
 
         this.peer.on('error', (err) => {
           if (err.type === 'unavailable-id') {
-            // If ID busy, fallback to dynamic peer and advertise
+            // The phone can only find the room encoded in its QR/link. Rotate
+            // the room code as well as the Peer ID so the visible QR stays valid.
             this.peer?.destroy();
-            this.peer = new Peer(PEER_ICE_CONFIG);
-            this.peer.on('open', () => {
-              this.peer?.on('connection', (conn) => this.setupHostConnection(conn));
-            });
+            this.peer = null;
+            const suffix = Math.floor(1000 + Math.random() * 9000);
+            this.roomCode = `ELITE-${suffix}`;
+            try {
+              localStorage.setItem('tahadi5_host_room', this.roomCode);
+              localStorage.setItem('tahadi5_active_room', this.roomCode);
+            } catch {}
+            this.updateStatus('connecting');
+            window.setTimeout(() => this.initPeer(), 250);
           } else {
             this.updateStatus('disconnected');
           }
