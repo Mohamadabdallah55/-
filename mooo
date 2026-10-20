@@ -1,0 +1,4 @@
+cd "/Users/mohamadabdallah/Documents/Codex/2026-10-20/new-chat/work/site"
+git add .
+git commit -m "Update competition redesign and fixes"
+git push origin main
