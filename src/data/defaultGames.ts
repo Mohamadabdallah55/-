@@ -3,51 +3,57 @@ import { CategoryInfo, GameItem, Team } from '../types';
 export const INITIAL_TEAMS: Team[] = [
   {
     id: 'team-1',
-    name: 'أبو شنيف',
-    shortName: 'ABO SHAIF',
+    name: 'الفريق A',
+    shortName: 'A',
     color: '#A855F7', // Violet / Purple
     bgBadge: 'from-purple-600/30 to-purple-900/40 border-purple-500/60',
     logo: 'crown',
+    captain: 'إيهم C',
   },
   {
     id: 'team-2',
-    name: 'يزيد',
-    shortName: 'YAZEED',
+    name: 'الفريق B',
+    shortName: 'B',
     color: '#06B6D4', // Cyan
     bgBadge: 'from-cyan-600/30 to-cyan-900/40 border-cyan-500/60',
     logo: 'shield',
+    captain: 'معتصم شاهر',
   },
   {
     id: 'team-3',
-    name: 'بندريتا',
-    shortName: 'BANDARITA',
+    name: 'الفريق C',
+    shortName: 'C',
     color: '#10B981', // Emerald
     bgBadge: 'from-emerald-600/30 to-emerald-900/40 border-emerald-500/60',
     logo: 'zap',
+    captain: 'عبدالرحمن المومني',
   },
   {
     id: 'team-4',
-    name: 'فهد سال',
-    shortName: 'FAHAD SAL',
+    name: 'الفريق D',
+    shortName: 'D',
     color: '#F59E0B', // Amber
     bgBadge: 'from-amber-600/30 to-amber-900/40 border-amber-500/60',
     logo: 'flame',
+    captain: 'عمر النجار C',
   },
   {
     id: 'team-5',
-    name: 'مروان',
-    shortName: 'MARWAN',
+    name: 'الفريق E',
+    shortName: 'E',
     color: '#F43F5E', // Rose
     bgBadge: 'from-rose-600/30 to-rose-900/40 border-rose-500/60',
     logo: 'swords',
+    captain: 'يوسف عودة C',
   },
   {
     id: 'team-6',
-    name: 'عزيز',
-    shortName: 'AZIZ',
+    name: 'الفريق F',
+    shortName: 'F',
     color: '#3B82F6', // Blue
     bgBadge: 'from-blue-600/30 to-blue-900/40 border-blue-500/60',
     logo: 'target',
+    captain: 'ريان C',
   },
 ];
 

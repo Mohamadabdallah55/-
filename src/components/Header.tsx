@@ -8,6 +8,7 @@ import {
   LibraryBig,
   MonitorPlay,
   Smartphone,
+  Settings2,
   Timer,
   Trophy,
   Tv,
@@ -23,6 +24,7 @@ interface HeaderProps {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
   onOpenTeamsModal: () => void;
+  onOpenSettingsModal?: () => void;
   onOpenResetModal: () => void;
   onOpenMobileConnectModal?: () => void;
   onToggleStageView?: () => void;
@@ -44,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
   onOpenTeamsModal,
+  onOpenSettingsModal,
   onOpenMobileConnectModal,
   onToggleStageView,
   onOpenHotkeys,
@@ -103,6 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="sidebar-actions">
           <button onClick={onOpenTeamsModal}><Users /><span>إدارة الفرق</span></button>
+          {onOpenSettingsModal && <button onClick={onOpenSettingsModal}><Settings2 /><span>إعدادات الدوري</span></button>}
           <button onClick={onOpenMobileConnectModal}><Smartphone /><span>ربط الهاتف</span></button>
           {onToggleStageView && <button onClick={onToggleStageView}><Tv /><span>وضع المسرح</span></button>}
           {onOpenHotkeys && <button onClick={onOpenHotkeys}><Keyboard /><span>اختصارات</span></button>}
@@ -120,6 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
         <div className="mobile-top-actions">
           <button onClick={onOpenTeamsModal} aria-label="إدارة الفرق"><Users /></button>
+          {onOpenSettingsModal && <button onClick={onOpenSettingsModal} aria-label="إعدادات الدوري"><Settings2 /></button>}
           <button onClick={onOpenMobileConnectModal} aria-label="ربط الهاتف"><Smartphone /></button>
           {onToggleStageView && <button onClick={onToggleStageView} aria-label="وضع المسرح"><Tv /></button>}
         </div>

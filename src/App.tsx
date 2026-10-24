@@ -13,6 +13,7 @@ import {
   CategoryKey,
   BanPickStatus,
   GameItem,
+  LeagueSettings,
 } from './types';
 import { CATEGORIES } from './data/defaultGames';
 import {
@@ -33,6 +34,8 @@ import {
   loadArenaColumnGames,
   saveArenaColumnGames,
   DEFAULT_ARENA_COLUMN_GAMES,
+  loadLeagueSettings,
+  saveLeagueSettings,
 } from './utils/storage';
 import { sound } from './utils/audio';
 import { Header } from './components/Header';
@@ -52,6 +55,7 @@ import { VictoryModal } from './components/VictoryModal';
 import { HotkeysModal } from './components/HotkeysModal';
 import { SpotlightCard } from './components/SpotlightCard';
 import { CountUpValue } from './components/CountUpValue';
+import { LeagueSettingsModal } from './components/LeagueSettingsModal';
 
 declare global {
   interface Window {
@@ -170,6 +174,7 @@ export default function App() {
   const [arenaColumnGames, setArenaColumnGames] = useState<Record<string, string[]>>(() =>
     loadArenaColumnGames()
   );
+  const [leagueSettings, setLeagueSettings] = useState<LeagueSettings>(() => loadLeagueSettings());
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<
@@ -179,6 +184,7 @@ export default function App() {
   // Modals
   const [isTeamsModalOpen, setIsTeamsModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isLeagueSettingsOpen, setIsLeagueSettingsOpen] = useState(false);
 
   // Cross-tab & WebSocket synchronization listener
   useEffect(() => {
@@ -190,6 +196,7 @@ export default function App() {
       if (type === 'CARDS_UPDATED') setCardStates(payload as Record<string, { gameId: string; status: BanPickStatus }>);
       if (type === 'GAMES_UPDATED') setGames(payload as GameItem[]);
       if (type === 'ARENA_GAMES_UPDATED') setArenaColumnGames(payload as Record<string, string[]>);
+      if (type === 'LEAGUE_SETTINGS_UPDATED') setLeagueSettings(payload as LeagueSettings);
       if (type === 'SWITCH_TAB_COMMAND') {
         const targetTab = payload as string;
         if (['match', 'arena', 'library', 'standings', 'timer', 'broadcast'].includes(targetTab)) {
@@ -394,6 +401,8 @@ export default function App() {
       teamBScore: currentMatch.teamBScore,
       winnerId,
       loserId,
+      weekNumber: leagueSettings.currentWeek,
+      pointsAwarded: leagueSettings.pointsByWeek[leagueSettings.currentWeek] ?? 3,
       categoryNames: selectedCategories.map(
         (cId) => CATEGORIES.find((c) => c.id === cId)?.nameAr || cId
       ),
@@ -568,6 +577,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenTeamsModal={() => setIsTeamsModalOpen(true)}
+        onOpenSettingsModal={() => setIsLeagueSettingsOpen(true)}
         onOpenResetModal={handleResetLeague}
         onOpenMobileConnectModal={() => setIsMobileConnectModalOpen(true)}
         onToggleStageView={() => setIsStageViewOpen(true)}
@@ -579,7 +589,7 @@ export default function App() {
       <div className="site-workspace">
       <div className="workspace-topbar">
         <div className="workspace-breadcrumb"><span className="breadcrumb-mark">CE</span><span>الموسم الأول</span><i /> <strong>{page.eyebrow}</strong></div>
-        <div className="workspace-meta"><span className="workspace-live"><i /> مباشر</span><span className="workspace-date">{today}</span><span className="workspace-round">الجولة <b>01</b></span></div>
+        <div className="workspace-meta"><span className="workspace-live"><i /> مباشر</span><span className="workspace-date">{today}</span><span className="workspace-round">الأسبوع <b>{String(leagueSettings.currentWeek).padStart(2, '0')}</b> · الفوز {leagueSettings.pointsByWeek[leagueSettings.currentWeek] ?? 3} نقاط</span></div>
       </div>
 
       {/* Main Content Area */}
@@ -753,6 +763,13 @@ export default function App() {
         onClose={() => setIsTeamsModalOpen(false)}
         teams={teams}
         onSaveTeams={handleSaveTeams}
+      />
+
+      <LeagueSettingsModal
+        isOpen={isLeagueSettingsOpen}
+        onClose={() => setIsLeagueSettingsOpen(false)}
+        settings={leagueSettings}
+        onSave={(settings) => { setLeagueSettings(settings); saveLeagueSettings(settings); }}
       />
 
       {/* Match History Modal */}

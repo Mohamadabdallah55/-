@@ -775,3 +775,26 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   .arena-choice-actions button { min-height: 31px; font-size: 7px; }
   .arena-console-footer small { font-size: 7px; }
 }
+.vault-fullscreen-toggle { display:flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:0 14px; border:1px solid rgba(190,242,100,.28); border-radius:12px; background:rgba(163,230,53,.09); color:#d9f99d; font:700 12px 'Cairo',sans-serif; cursor:pointer; }
+.vault-fullscreen-toggle svg { width:16px; height:16px; }
+.games-vault-fullscreen { position:fixed; inset:0; z-index:100; overflow:auto; padding:24px clamp(16px,4vw,64px) 36px; background:#070b09; }
+.games-vault-fullscreen .vault-grid { grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); }
+.games-vault-fullscreen .vault-game-card { min-height:330px; }
+.league-settings-modal { position:relative; width:min(720px,100%); max-height:88vh; overflow:auto; padding:26px; border:1px solid rgba(190,242,100,.24); border-radius:24px; background:linear-gradient(145deg,#101a14,#080d0b 70%); color:#f5f7ef; box-shadow:0 28px 100px #000b; direction:rtl; }
+.league-settings-heading { display:flex; align-items:center; gap:14px; margin:0 44px 22px 0; }
+.league-settings-heading>svg { width:42px; height:42px; padding:10px; border-radius:14px; color:#bef264; background:#bef26418; }
+.league-settings-heading span { color:#bef264; font:700 10px 'Orbitron',monospace; letter-spacing:.12em; }
+.league-settings-heading h2 { margin:4px 0; font:800 24px 'Changa',sans-serif; }
+.league-settings-heading p { margin:0; color:#9ba89f; font-size:12px; }
+.league-current-week { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 16px; margin-bottom:16px; border:1px solid #26372b; border-radius:14px; color:#e8efdF; font-weight:700; }
+.league-current-week input,.league-week-points input { width:86px; padding:8px 10px; border:1px solid #344337; border-radius:10px; background:#080d0b; color:#f4f8eb; text-align:center; font:700 16px 'Orbitron',monospace; }
+.league-week-points { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.league-week-points label { display:flex; flex-direction:column; align-items:center; gap:5px; padding:13px 8px; border:1px solid #26372b; border-radius:13px; background:#ffffff04; }
+.league-week-points label span { color:#e4eadf; font-size:12px; font-weight:800; }
+.league-week-points label small { color:#89958c; font-size:10px; }
+.league-settings-modal footer { display:flex; justify-content:flex-start; gap:10px; margin-top:20px; padding-top:16px; border-top:1px solid #243228; }
+.league-settings-cancel,.league-settings-save { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:10px 16px; border:0; border-radius:11px; cursor:pointer; font:700 12px 'Cairo',sans-serif; }
+.league-settings-cancel { background:#1b251e; color:#cbd5cc; }
+.league-settings-save { background:#bef264; color:#17220f; }
+.league-settings-save svg { width:15px; height:15px; }
+@media(max-width:640px) { .vault-fullscreen-toggle { padding:0 10px; font-size:11px; } .league-settings-modal { padding:20px 16px; } .league-week-points { grid-template-columns:repeat(2,minmax(0,1fr)); } }

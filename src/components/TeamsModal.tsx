@@ -57,6 +57,12 @@ export const TeamsModal: React.FC<TeamsModalProps> = ({
     setEditedTeams(next);
   };
 
+  const handleChangeCaptain = (index: number, captain: string) => {
+    const next = [...editedTeams];
+    next[index] = { ...next[index], captain };
+    setEditedTeams(next);
+  };
+
   const handleChangeColor = (index: number, color: string) => {
     const next = [...editedTeams];
     next[index] = { ...next[index], color };
@@ -139,6 +145,14 @@ export const TeamsModal: React.FC<TeamsModalProps> = ({
                       className="bg-[#070B19] text-white font-mono text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 focus:border-purple-400 focus:outline-none w-28 uppercase"
                     />
                   </div>
+                  <input
+                    type="text"
+                    value={team.captain || ''}
+                    onChange={(e) => handleChangeCaptain(idx, e.target.value)}
+                    placeholder="اسم الكابتن"
+                    aria-label={`كابتن ${team.name}`}
+                    className="bg-[#070B19] text-amber-200 font-semibold text-sm px-3 py-1.5 rounded-lg border border-slate-700 focus:border-amber-400 focus:outline-none w-full max-w-sm"
+                  />
                 </div>
               </div>
 
