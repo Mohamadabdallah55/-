@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { GameItem, BanPickStatus, Team } from '../types';
 import { GameIcon } from './GameIcons';
-import { Ban, Check, Play, RotateCcw, Scale, Search, X } from 'lucide-react';
+import { Ban, Check, Play, RotateCcw, Scale, Search, X, Maximize2, Minimize2 } from 'lucide-react';
 import { sound } from '../utils/audio';
 
 interface GamesLibraryMapProps {
@@ -35,6 +35,20 @@ export const GamesLibraryMap: React.FC<GamesLibraryMapProps> = ({
   const [selectedGame, setSelectedGame] = useState<GameItem | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const libraryRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await libraryRef.current?.requestFullscreen();
+    } catch { /* Fullscreen can be unavailable in embedded browser contexts. */ }
+  };
+  React.useEffect(() => {
+    const update = () => setIsFullscreen(document.fullscreenElement === libraryRef.current);
+    document.addEventListener('fullscreenchange', update);
+    return () => document.removeEventListener('fullscreenchange', update);
+  }, []);
 
   const filteredGames = useMemo(() => games.filter((game) => {
     const matchesCategory = categoryFilter === 'all' ||
@@ -62,10 +76,11 @@ export const GamesLibraryMap: React.FC<GamesLibraryMapProps> = ({
   ) || categories[0];
 
   return (
-    <div className="games-vault">
+    <div ref={libraryRef} className={`games-vault ${isFullscreen ? 'games-vault-fullscreen' : ''}`}>
       <div className="vault-toolbar">
         <div className="vault-count"><span className="vault-count-number">{filteredGames.length.toString().padStart(2, '0')}</span><span>لعبة<br /><small>في المكتبة</small></span></div>
         <div className="vault-search"><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن لعبة بالاسم..." aria-label="ابحث في مكتبة الألعاب" /><kbd>⌘ K</kbd></div>
+        <button className="vault-fullscreen-toggle" onClick={toggleFullscreen}>{isFullscreen ? <Minimize2 /> : <Maximize2 />} {isFullscreen ? 'إنهاء ملء الشاشة' : 'ملء الشاشة'}</button>
         <div className="vault-caption"><span className="vault-caption-mark">05</span><span><strong>فئات الدوري</strong><small>مجموعة الألعاب المعتمدة</small></span></div>
       </div>
 

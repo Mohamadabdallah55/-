@@ -36,7 +36,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
             <span>جدول ترتيب دوري صراع النخبة (الفرق الـ 6)</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            يُحتسب الترتيب تلقائياً بعد كل مباراة: النقاط (3 للفوز) &larr; فارق الجولات &larr; الجولات المسجلة
+            يُحتسب الترتيب تلقائياً حسب نقاط الفوز المحددة لكل أسبوع، ثم فارق الجولات والجولات المسجلة.
           </p>
         </div>
 
@@ -144,6 +144,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
                             ({row.team.shortName})
                           </span>
                         </div>
+                        {row.team.captain && <small className="block text-[11px] text-amber-200/75 mt-0.5">الكابتن: {row.team.captain}</small>}
                       </div>
                     </div>
                   </td>
