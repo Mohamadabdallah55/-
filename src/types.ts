@@ -5,6 +5,12 @@ export interface Team {
   color: string; // e.g. '#A855F7', '#06B6D4'
   bgBadge: string;
   logo: string; // key of avatar/badge icon
+  captain?: string;
+}
+
+export interface LeagueSettings {
+  currentWeek: number;
+  pointsByWeek: Record<number, number>;
 }
 
 export interface MatchRound {
@@ -36,6 +42,8 @@ export interface MatchRecord {
   teamBScore: number;
   winnerId: string;
   loserId: string;
+  weekNumber?: number;
+  pointsAwarded?: number;
   categoryNames?: string[];
   rounds?: MatchRound[];
 }
