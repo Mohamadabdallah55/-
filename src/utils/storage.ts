@@ -7,6 +7,7 @@ import {
   CardState,
   GameItem,
   DualTimerSyncState,
+  LeagueSettings,
 } from '../types';
 import { INITIAL_TEAMS, DEFAULT_GAMES } from '../data/defaultGames';
 import { webrtcSync } from './webrtcSync';
@@ -20,7 +21,15 @@ const STORAGE_KEYS = {
   CARD_STATES: 'tahadi5_card_states_v1',
   TIMER_SYNC: 'tahadi5_timer_sync_v1',
   ARENA_COLUMN_GAMES: 'tahadi5_arena_column_games_v1',
+  LEAGUE_SETTINGS: 'tahadi5_league_settings_v1',
 };
+
+export const DEFAULT_LEAGUE_SETTINGS: LeagueSettings = { currentWeek: 2, pointsByWeek: { 1: 3, 2: 4, 3: 5 } };
+export const WEEK_ONE_RESULTS: MatchRecord[] = [
+  { id: 'week-1-team-d', date: 'الأسبوع الأول', timestamp: 1, teamAId: 'team-4', teamBId: 'team-1', teamAName: 'الفريق D', teamBName: 'الفريق A', teamAScore: 1, teamBScore: 0, winnerId: 'team-4', loserId: 'team-1', weekNumber: 1, pointsAwarded: 3 },
+  { id: 'week-1-team-c', date: 'الأسبوع الأول', timestamp: 2, teamAId: 'team-3', teamBId: 'team-6', teamAName: 'الفريق C', teamBName: 'الفريق F', teamAScore: 1, teamBScore: 0, winnerId: 'team-3', loserId: 'team-6', weekNumber: 1, pointsAwarded: 3 },
+  { id: 'week-1-team-e', date: 'الأسبوع الأول', timestamp: 3, teamAId: 'team-5', teamBId: 'team-2', teamAName: 'الفريق E', teamBName: 'الفريق B', teamAScore: 1, teamBScore: 0, winnerId: 'team-5', loserId: 'team-2', weekNumber: 1, pointsAwarded: 3 },
+];
 
 // Cross-tab broadcast channel & WebSocket real-time network sync
 let broadcastChannel: BroadcastChannel | null = null;
@@ -142,6 +151,7 @@ function syncIncomingUpdate(type: string, payload: unknown) {
     if (type === 'CARDS_UPDATED') batchSetLocalStorage(STORAGE_KEYS.CARD_STATES, JSON.stringify(payload));
     if (type === 'GAMES_UPDATED') batchSetLocalStorage(STORAGE_KEYS.GAMES, JSON.stringify(payload));
     if (type === 'ARENA_GAMES_UPDATED') batchSetLocalStorage(STORAGE_KEYS.ARENA_COLUMN_GAMES, JSON.stringify(payload));
+    if (type === 'LEAGUE_SETTINGS_UPDATED') batchSetLocalStorage(STORAGE_KEYS.LEAGUE_SETTINGS, JSON.stringify(payload));
   } catch {}
 
   // Notify registered React hooks
@@ -163,6 +173,8 @@ if (typeof window !== 'undefined') {
     try {
       const teams = localStorage.getItem(STORAGE_KEYS.TEAMS);
       if (teams) fullState['TEAMS_UPDATED'] = JSON.parse(teams);
+      const settings = localStorage.getItem(STORAGE_KEYS.LEAGUE_SETTINGS);
+      if (settings) fullState['LEAGUE_SETTINGS_UPDATED'] = JSON.parse(settings);
       const match = localStorage.getItem(STORAGE_KEYS.CURRENT_MATCH);
       if (match) fullState['MATCH_UPDATED'] = JSON.parse(match);
       const history = localStorage.getItem(STORAGE_KEYS.MATCHES_HISTORY);
@@ -232,7 +244,15 @@ export function subscribeToBroadcast(handler: (type: string, payload: unknown) =
 export function loadTeams(): Team[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.TEAMS);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const saved: Team[] = JSON.parse(raw);
+      const migrated = saved.map((team, index) => {
+        const standard = INITIAL_TEAMS.find((item) => item.id === team.id) || INITIAL_TEAMS[index];
+        return standard && !team.captain ? { ...team, name: standard.name, shortName: standard.shortName, captain: standard.captain } : team;
+      });
+      if (migrated.some((team, index) => team !== saved[index])) localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(migrated));
+      return migrated;
+    }
     localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(INITIAL_TEAMS));
   } catch {}
   return INITIAL_TEAMS;
@@ -242,6 +262,25 @@ export function saveTeams(teams: Team[]) {
   try {
     batchSetLocalStorage(STORAGE_KEYS.TEAMS, JSON.stringify(teams));
     broadcastMessage('TEAMS_UPDATED', teams);
+  } catch {}
+}
+
+export function loadLeagueSettings(): LeagueSettings {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.LEAGUE_SETTINGS);
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<LeagueSettings>;
+      return { currentWeek: Math.max(1, Number(saved.currentWeek) || 2), pointsByWeek: { ...DEFAULT_LEAGUE_SETTINGS.pointsByWeek, ...(saved.pointsByWeek || {}) } };
+    }
+    localStorage.setItem(STORAGE_KEYS.LEAGUE_SETTINGS, JSON.stringify(DEFAULT_LEAGUE_SETTINGS));
+  } catch {}
+  return DEFAULT_LEAGUE_SETTINGS;
+}
+
+export function saveLeagueSettings(settings: LeagueSettings) {
+  try {
+    batchSetLocalStorage(STORAGE_KEYS.LEAGUE_SETTINGS, JSON.stringify(settings));
+    broadcastMessage('LEAGUE_SETTINGS_UPDATED', settings);
   } catch {}
 }
 
@@ -342,7 +381,14 @@ export function saveCurrentMatch(match: CurrentMatch) {
 export function loadMatchesHistory(): MatchRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.MATCHES_HISTORY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const saved: MatchRecord[] = JSON.parse(raw);
+      if (saved.length) return saved;
+      localStorage.setItem(STORAGE_KEYS.MATCHES_HISTORY, JSON.stringify(WEEK_ONE_RESULTS));
+      return WEEK_ONE_RESULTS;
+    }
+    localStorage.setItem(STORAGE_KEYS.MATCHES_HISTORY, JSON.stringify(WEEK_ONE_RESULTS));
+    return WEEK_ONE_RESULTS;
   } catch {}
   return [];
 }
@@ -405,6 +451,7 @@ export function computeStandings(teams: Team[], matches: MatchRecord[]): LeagueR
     };
   });
 
+  const winOrder = new Map<string, number>();
   // Sort matches chronologically to track form
   const sortedMatches = [...matches].sort((a, b) => a.timestamp - b.timestamp);
 
@@ -423,14 +470,16 @@ export function computeStandings(teams: Team[], matches: MatchRecord[]): LeagueR
 
       if (m.teamAScore > m.teamBScore) {
         rowA.won += 1;
-        rowA.points += 3;
+        rowA.points += m.pointsAwarded ?? 3;
+        if (!winOrder.has(rowA.teamId)) winOrder.set(rowA.teamId, winOrder.size);
         rowA.form.push('W');
 
         rowB.lost += 1;
         rowB.form.push('L');
       } else if (m.teamBScore > m.teamAScore) {
         rowB.won += 1;
-        rowB.points += 3;
+        rowB.points += m.pointsAwarded ?? 3;
+        if (!winOrder.has(rowB.teamId)) winOrder.set(rowB.teamId, winOrder.size);
         rowB.form.push('W');
 
         rowA.lost += 1;
@@ -451,7 +500,8 @@ export function computeStandings(teams: Team[], matches: MatchRecord[]): LeagueR
     if (b.points !== a.points) return b.points - a.points;
     if (b.gd !== a.gd) return b.gd - a.gd;
     if (b.gf !== a.gf) return b.gf - a.gf;
-    return b.won - a.won;
+    if (b.won !== a.won) return b.won - a.won;
+    return (winOrder.get(a.teamId) ?? Number.MAX_SAFE_INTEGER) - (winOrder.get(b.teamId) ?? Number.MAX_SAFE_INTEGER);
   });
 }
 
