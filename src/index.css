@@ -798,7 +798,6 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .league-settings-save { background:#bef264; color:#17220f; }
 .league-settings-save svg { width:15px; height:15px; }
 @media(max-width:640px) { .vault-fullscreen-toggle { padding:0 10px; font-size:11px; } .league-settings-modal { padding:20px 16px; } .league-week-points { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-
 /* Classic neon game wall — restored for the games experience only. */
 .arena-shell-redesigned {
   --arena-neon:#9d5cff;
