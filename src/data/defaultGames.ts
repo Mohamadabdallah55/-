@@ -229,6 +229,14 @@ export const DEFAULT_GAMES: GameItem[] = [
     description: 'تحدي المهارة الحركية والتركيز الذهني',
     iconType: 'kalak',
   },
+  {
+    id: 'g-family-feud',
+    categoryId: 'mental',
+    nameAr: 'فاميلي فيود',
+    nameEn: 'FAMILY FEUD',
+    description: 'تحدي العائلات لاكتشاف أكثر الإجابات شيوعاً قبل الفريق المنافس',
+    iconType: 'family-feud',
+  },
 
   // 3. بدني (PHYSICAL)
   {
@@ -314,13 +322,5 @@ export const DEFAULT_GAMES: GameItem[] = [
     nameEn: 'STOP THE TIMER',
     description: 'إيقاف ساعة التوقيت بدقة متناهية دون النظر للشاشة',
     iconType: 'timer',
-  },
-  {
-    id: 'g-fan-vote',
-    categoryId: 'fan_vote',
-    nameAr: 'تصويت الجمهور',
-    nameEn: 'FAN VOTE',
-    description: 'اللعبة التي يختارها الجمهور بالتصويت المباشر من كامل المكتبة',
-    iconType: 'flame',
   },
 ];

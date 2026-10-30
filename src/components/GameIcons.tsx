@@ -7,6 +7,18 @@ interface IconProps {
 
 export const GameIcon: React.FC<IconProps> = ({ name, className = 'w-8 h-8' }) => {
   switch (name) {
+    case 'family-feud':
+      return (
+        <svg viewBox="0 0 100 100" fill="none" className={className}>
+          <circle cx="50" cy="50" r="46" fill="#17102E" stroke="#FACC15" strokeWidth="3" />
+          <ellipse cx="50" cy="50" rx="34" ry="25" fill="#2563EB" stroke="#FDE68A" strokeWidth="3" />
+          <path d="M25 50h50M50 27v46" stroke="#93C5FD" strokeWidth="2" opacity=".7" />
+          <circle cx="38" cy="44" r="7" fill="#FDE68A" />
+          <circle cx="62" cy="44" r="7" fill="#FDE68A" />
+          <path d="M27 65c3-9 10-14 19-14M73 65c-3-9-10-14-19-14" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+          <text x="50" y="87" textAnchor="middle" fill="#FACC15" fontFamily="sans-serif" fontWeight="900" fontSize="11">FEUD</text>
+        </svg>
+      );
     // EA FC 27 (FC 27)
     case 'fc27':
       return (

@@ -798,3 +798,61 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .league-settings-save { background:#bef264; color:#17220f; }
 .league-settings-save svg { width:15px; height:15px; }
 @media(max-width:640px) { .vault-fullscreen-toggle { padding:0 10px; font-size:11px; } .league-settings-modal { padding:20px 16px; } .league-week-points { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* Classic neon game wall — restored for the games experience only. */
+.arena-shell-redesigned {
+  --arena-neon:#9d5cff;
+  --arena-neon-blue:#4f8dff;
+  border-color:rgba(151,83,255,.5) !important;
+  background:
+    linear-gradient(118deg,transparent 0 8%,rgba(91,52,180,.2) 8.2% 8.35%,transparent 8.55% 91.5%,rgba(91,52,180,.2) 91.7% 91.85%,transparent 92%),
+    radial-gradient(circle at 50% -10%,rgba(112,61,210,.32),transparent 45%),
+    linear-gradient(145deg,#160d2e,#080b20 68%,#100824) !important;
+  box-shadow:0 0 0 1px rgba(91,141,255,.16),0 25px 80px #05030ccc,inset 0 0 70px rgba(106,45,190,.13) !important;
+}
+.arena-shell-redesigned .arena-console-topline,
+.arena-shell-redesigned .arena-console-footer { border-color:rgba(151,83,255,.24); }
+.arena-shell-redesigned .arena-live-dot { background:#b881ff; box-shadow:0 0 12px #9d5cff; }
+.arena-shell-redesigned .arena-console-tools button { color:#e7dcff; background:#17112e; border-color:rgba(157,92,255,.34); }
+.arena-shell-redesigned .arena-console-tools button:hover { color:#fff; background:#6d35c9; border-color:#b982ff; }
+.arena-shell-redesigned .arena-duel-strip { background:linear-gradient(90deg,rgba(72,39,130,.2),rgba(20,18,48,.86),rgba(37,70,131,.2)); border-color:rgba(143,92,226,.24); }
+.arena-shell-redesigned .arena-section-kicker,
+.arena-shell-redesigned .arena-footer-mark { color:#c39cff; }
+.arena-shell-redesigned .arena-stage-badge { color:#e7d9ff; background:rgba(126,73,210,.16); border-color:rgba(166,110,255,.38); }
+.arena-shell-redesigned .arena-column-grid { gap:12px; }
+.arena-shell-redesigned .arena-category-column,
+.arena-shell-redesigned .arena-category-column.captains-column {
+  padding:10px;
+  border-color:color-mix(in srgb,var(--column-accent) 52%,#783ad8) !important;
+  border-radius:22px;
+  background:linear-gradient(180deg,rgba(28,20,61,.94),rgba(10,14,35,.96)) !important;
+  box-shadow:0 0 0 1px rgba(110,143,255,.11),0 0 28px color-mix(in srgb,var(--column-accent) 11%,transparent),inset 0 1px rgba(255,255,255,.05) !important;
+}
+.arena-shell-redesigned .arena-column-header { min-height:54px; border-color:color-mix(in srgb,var(--column-accent) 42%,transparent); background:linear-gradient(135deg,rgba(34,23,70,.96),rgba(13,21,48,.96)); }
+.arena-shell-redesigned .arena-column-name strong { color:#fff; font-size:13px; }
+.arena-shell-redesigned .arena-column-game { text-align:center; background:linear-gradient(145deg,#16152e,#0b1126); border-color:rgba(132,107,213,.27); border-radius:18px; }
+.arena-shell-redesigned .arena-column-game:hover { border-color:var(--column-accent); box-shadow:0 0 22px color-mix(in srgb,var(--column-accent) 25%,transparent); }
+.arena-shell-redesigned .arena-column-art { min-height:112px; background:radial-gradient(circle,rgba(97,80,176,.2),transparent 60%),#0b1126; border-color:rgba(127,93,216,.25); }
+.arena-shell-redesigned .arena-column-art svg { width:66px; height:66px; filter:grayscale(1) brightness(2.2) drop-shadow(0 0 8px rgba(181,151,255,.35)); }
+.arena-shell-redesigned .arena-column-game-info > strong { text-align:center; font-size:12px; }
+.arena-shell-redesigned .arena-column-game-info > small { text-align:center; color:#9e98bd; }
+.arena-shell-redesigned .arena-column-actions button { color:#d9cdf6; background:#14122b; border-color:rgba(151,92,235,.24); }
+.arena-shell-redesigned .arena-column-actions button:hover { color:#fff; border-color:#9d5cff; background:#33205c; }
+.arena-shell-redesigned .arena-state-line { justify-content:center; }
+.arena-shell-redesigned .arena-column-game.state-current { border-color:#d6a8ff; box-shadow:0 0 25px rgba(157,92,255,.34); }
+.arena-shell-redesigned .arena-column-game.state-current .arena-column-art svg { filter:none; }
+
+/* Phone timer controls */
+.remote-tabs { grid-template-columns:repeat(3,1fr) !important; }
+.remote-timer-content { direction:rtl; }
+.remote-timer-hero { display:flex; flex-direction:column; align-items:center; gap:6px; padding:22px 16px; text-align:center; border:1px solid rgba(216,242,122,.24); border-radius:20px; background:radial-gradient(circle at 50% 0,rgba(216,242,122,.14),transparent 60%),#17211c; }
+.remote-timer-kicker { color:#d8f27a; font:700 9px 'Orbitron',monospace; letter-spacing:.16em; }
+.remote-timer-hero svg { color:#d8f27a; }
+.remote-timer-hero h2 { margin:0; color:#f5f8ef; font:800 18px 'Changa',sans-serif; }
+.remote-timer-hero p { margin:0; color:#aab6ac; font-size:11px; }
+.remote-timer-preset { min-height:44px; color:#d7dfd5; background:#18211d; border:1px solid #334139; border-radius:12px; font:800 13px 'Orbitron',monospace; }
+.remote-timer-preset.is-active { color:#17200d; background:#d8f27a; border-color:#efffbd; }
+.remote-timer-input { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; color:#d9e2d7; background:#141d19; border:1px solid #303e35; border-radius:14px; font-size:12px; font-weight:800; }
+.remote-timer-input input { width:108px; min-height:44px; color:#f7faef; background:#080e0b; border:1px solid #53634f; border-radius:10px; text-align:center; font:800 18px 'Orbitron',monospace; }
+.remote-timer-start { display:flex; align-items:center; justify-content:center; gap:9px; width:100%; min-height:58px; color:#15200b; background:linear-gradient(135deg,#e9ffad,#bddf58); border:1px solid #f1ffc6; border-radius:16px; font:900 15px 'Changa',sans-serif; box-shadow:0 12px 28px rgba(190,225,91,.18); }
+.remote-timer-secondary { display:flex; align-items:center; justify-content:center; gap:7px; min-height:46px; color:#e5ece1; background:#202a24; border:1px solid #3c4a41; border-radius:13px; font-size:12px; font-weight:800; }

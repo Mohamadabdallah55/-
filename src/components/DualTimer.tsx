@@ -21,6 +21,7 @@ import {
 import { sound } from '../utils/audio';
 import { Team } from '../types';
 import { revealWithGsap } from '../utils/gsapMotion';
+import { subscribeToBroadcast } from '../utils/storage';
 
 interface DualTimerProps {
   teamA?: Team;
@@ -88,6 +89,31 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [expandedTimer, setExpandedTimer] = useState<'none' | 'countdown' | 'stopwatch'>('none');
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Commands sent from the phone remote. Keeping this listener inside the timer
+  // makes the same controls work in the main tab and the standalone timer screen.
+  useEffect(() => subscribeToBroadcast((type, payload) => {
+    if (type !== 'TIMER_COMMAND' || !payload || typeof payload !== 'object') return;
+    const command = payload as { action?: string; seconds?: number };
+    const seconds = Math.max(1, Math.min(3600, Number(command.seconds) || countdownInitial));
+    if (command.action === 'set') {
+      setCountdownActive(false);
+      setCountdownInitial(seconds);
+      setCountdownLeft(seconds);
+    }
+    if (command.action === 'start') {
+      setCountdownInitial(seconds);
+      setCountdownLeft(seconds);
+      setCountdownActive(true);
+      setExpandedTimer('countdown');
+    }
+    if (command.action === 'pause') setCountdownActive(false);
+    if (command.action === 'reset') {
+      setCountdownActive(false);
+      setCountdownInitial(seconds);
+      setCountdownLeft(seconds);
+    }
+  }), [countdownInitial]);
 
   useLayoutEffect(() => revealWithGsap(containerRef.current, '.timer-countdown-card, .timer-duel-card', {
     y: 30,

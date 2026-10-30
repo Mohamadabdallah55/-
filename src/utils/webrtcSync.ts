@@ -28,6 +28,8 @@ class WebRTCSyncManager {
   private fullStateProvider: (() => Record<string, unknown>) | null = null;
   private reconnectTimer: number | null = null;
   private heartbeatTimer: number | null = null;
+  private lastPongAt: number = Date.now();
+  private reconnectAttempts: number = 0;
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -122,6 +124,7 @@ class WebRTCSyncManager {
         this.peer = new Peer(peerId, PEER_ICE_CONFIG);
 
         this.peer.on('open', () => {
+          this.reconnectAttempts = 0;
           this.updateStatus(this.connections.size > 0 ? 'connected' : 'connecting');
         });
 
@@ -147,17 +150,27 @@ class WebRTCSyncManager {
             this.updateStatus('disconnected');
           }
         });
+        this.peer.on('disconnected', () => {
+          this.updateStatus('disconnected');
+          window.setTimeout(() => this.restartPeer(), 1000);
+        });
       } else {
         // Client (Phone Remote)
         this.peer = new Peer(PEER_ICE_CONFIG);
 
         this.peer.on('open', () => {
+          this.reconnectAttempts = 0;
           this.connectToHost();
         });
 
         this.peer.on('error', () => {
           this.updateStatus('disconnected');
           this.scheduleReconnect();
+        });
+        this.peer.on('disconnected', () => {
+          this.hostConnection = null;
+          this.updateStatus('disconnected');
+          this.scheduleReconnect(true);
         });
       }
     } catch (e) {
@@ -205,6 +218,8 @@ class WebRTCSyncManager {
 
       conn.on('open', () => {
         this.hostConnection = conn;
+        this.lastPongAt = Date.now();
+        this.reconnectAttempts = 0;
         this.updateStatus('connected');
       });
 
@@ -229,14 +244,30 @@ class WebRTCSyncManager {
     }
   }
 
-  private scheduleReconnect() {
+  private scheduleReconnect(recreatePeer = false) {
     if (this.reconnectTimer) return;
+    const delay = Math.min(8000, 1200 * Math.max(1, this.reconnectAttempts + 1));
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
+      this.reconnectAttempts += 1;
       if (!this.isHost && (!this.hostConnection || !this.hostConnection.open)) {
-        this.connectToHost();
+        if (recreatePeer || !this.peer || this.peer.destroyed || this.peer.disconnected || this.reconnectAttempts % 4 === 0) {
+          this.restartPeer();
+        } else {
+          this.connectToHost();
+        }
       }
-    }, 2000);
+    }, delay);
+  }
+
+  private restartPeer() {
+    try {
+      this.hostConnection?.close();
+      this.hostConnection = null;
+      this.peer?.destroy();
+    } catch {}
+    this.peer = null;
+    window.setTimeout(() => this.initPeer(), 300);
   }
 
   private startHeartbeat() {
@@ -246,8 +277,14 @@ class WebRTCSyncManager {
         try {
           this.hostConnection.send(JSON.stringify({ type: 'PING' }));
         } catch {}
+        if (Date.now() - this.lastPongAt > 15000) {
+          this.updateStatus('disconnected');
+          this.scheduleReconnect(true);
+        }
+      } else if (!this.isHost) {
+        this.scheduleReconnect(!this.peer || this.peer.destroyed || this.peer.disconnected);
       }
-    }, 5000);
+    }, 4000);
   }
 
   private handleIncomingData(data: unknown, senderPeerId?: string) {
@@ -264,6 +301,7 @@ class WebRTCSyncManager {
       }
 
       if (parsed?.type === 'PONG') {
+        this.lastPongAt = Date.now();
         this.updateStatus('connected');
         return;
       }

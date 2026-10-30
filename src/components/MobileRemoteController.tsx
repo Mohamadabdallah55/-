@@ -80,6 +80,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('digital');
   const [editingGameSlot, setEditingGameSlot] = useState<{ catId: string; slotIdx: number } | null>(null);
   const [remoteFeedback, setRemoteFeedback] = useState<string | null>(null);
+  const [remoteTimerSeconds, setRemoteTimerSeconds] = useState<number>(60);
   const [connStatus, setConnStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const roomCode = webrtcSync.getRoomCode();
 
@@ -296,6 +297,21 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
         >
           <Trophy className="w-4 h-4" />
           <span>النتيجة والفرق</span>
+        </button>
+
+        <button
+          onClick={() => {
+            sound.playTick();
+            setActiveRemoteTab('timer');
+          }}
+          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold font-changa flex items-center justify-center gap-1.5 transition-all ${
+            activeRemoteTab === 'timer'
+              ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30 border border-amber-300'
+              : 'bg-slate-900 text-slate-400 border border-slate-800'
+          }`}
+        >
+          <Timer className="w-4 h-4" />
+          <span>المؤقت</span>
         </button>
       </div>
 
@@ -737,6 +753,85 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>تصفير النتيجة (0 - 0)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeRemoteTab === 'timer' && (
+        <div className="remote-content remote-timer-content p-4 space-y-4">
+          <div className="remote-timer-hero">
+            <span className="remote-timer-kicker">TIMER REMOTE</span>
+            <Timer className="w-8 h-8" />
+            <h2>تحكم بالمؤقت من الهاتف</h2>
+            <p>حدّد الوقت ثم شغّل العداد على شاشة اللابتوب مباشرة.</p>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {[30, 45, 60, 90].map((seconds) => (
+              <button
+                key={seconds}
+                onClick={() => {
+                  triggerHaptic(15);
+                  setRemoteTimerSeconds(seconds);
+                  broadcastMessage('TIMER_COMMAND', { action: 'set', seconds });
+                  showFeedback(`تم ضبط المؤقت على ${seconds} ثانية`);
+                }}
+                className={`remote-timer-preset ${remoteTimerSeconds === seconds ? 'is-active' : ''}`}
+              >
+                {seconds}ث
+              </button>
+            ))}
+          </div>
+
+          <label className="remote-timer-input">
+            <span>المدة بالثواني</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="3600"
+              value={remoteTimerSeconds}
+              onChange={(event) => setRemoteTimerSeconds(Math.max(1, Math.min(3600, Number(event.target.value) || 1)))}
+            />
+          </label>
+
+          <button
+            onClick={() => {
+              triggerHaptic(35);
+              broadcastMessage('SWITCH_TAB_COMMAND', 'timer');
+              // Let the host mount the timer screen before sending its first command.
+              window.setTimeout(() => {
+                broadcastMessage('TIMER_COMMAND', { action: 'start', seconds: remoteTimerSeconds });
+              }, 350);
+              showFeedback(`بدأ المؤقت: ${remoteTimerSeconds} ثانية`);
+            }}
+            className="remote-timer-start"
+          >
+            <Play className="w-5 h-5" />
+            <span>ابدأ العداد الآن</span>
+          </button>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                triggerHaptic(20);
+                broadcastMessage('TIMER_COMMAND', { action: 'pause' });
+                showFeedback('تم إيقاف المؤقت مؤقتاً');
+              }}
+              className="remote-timer-secondary"
+            >
+              <Pause className="w-4 h-4" /> إيقاف مؤقت
+            </button>
+            <button
+              onClick={() => {
+                triggerHaptic(20);
+                broadcastMessage('TIMER_COMMAND', { action: 'reset', seconds: remoteTimerSeconds });
+                showFeedback('تمت إعادة ضبط المؤقت');
+              }}
+              className="remote-timer-secondary"
+            >
+              <RotateCcw className="w-4 h-4" /> إعادة ضبط
             </button>
           </div>
         </div>

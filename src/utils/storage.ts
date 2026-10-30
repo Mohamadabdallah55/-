@@ -290,17 +290,14 @@ export function loadGames(): GameItem[] {
     const raw = localStorage.getItem(STORAGE_KEYS.GAMES);
     if (raw) {
       const parsed: GameItem[] = JSON.parse(raw);
-      // Ensure all 3 1v1 games are present
-      const hasAll1v1 =
-        parsed.some((g) => g.id === 'g-fatal-fury') &&
-        parsed.some((g) => g.id === 'g-throw-challenge') &&
-        parsed.some((g) => g.id === 'g-fc27-1v1');
-      const hasOldGame = parsed.some((g) =>
-        ['g-tricky-towers', 'g-basketball', 'g-strength-tester', 'g-crash-team-racing'].includes(g.id)
-      );
-      if (hasAll1v1 && !hasOldGame && parsed.length >= 22) {
-        return parsed;
-      }
+      // The event list is authoritative. Keep edited rules/descriptions for approved
+      // games, add newly approved games, and drop retired games left in localStorage.
+      const approved = DEFAULT_GAMES.map((defaultGame) => {
+        const saved = parsed.find((game) => game.id === defaultGame.id);
+        return saved ? { ...defaultGame, ...saved, id: defaultGame.id } : defaultGame;
+      });
+      localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(approved));
+      return approved;
     }
   } catch {}
   try {
@@ -511,7 +508,7 @@ export const DEFAULT_ARENA_COLUMN_GAMES: Record<string, string[]> = {
   physical: ['g-penalty-shoot', 'g-football-2v2', 'g-bottle-flip-xo'],
   '1v1': ['g-fatal-fury', 'g-throw-challenge', 'g-fc27-1v1'],
   captains: ['g-fatal-fury', 'g-throw-challenge', 'g-fc27-1v1'],
-  fan_vote: ['g-box-of-liars', 'g-stop-timer', 'g-fan-vote'],
+  fan_vote: ['g-box-of-liars', 'g-stop-timer', 'g-family-feud'],
 };
 
 export function loadArenaColumnGames(): Record<string, string[]> {
