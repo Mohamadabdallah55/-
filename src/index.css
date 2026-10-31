@@ -369,11 +369,8 @@
 .broadcast-screen [class*="shadow-purple-"], .broadcast-screen [class*="shadow-cyan-"] { box-shadow: 0 10px 24px rgba(0,0,0,.32) !important; }
 
 /* Shared modals, buttons, reduced motion */
-[class*="fixed inset-0 z-50"] > div { border-color: rgba(214,247,106,.2) !important; background-color: #111a17 !important; box-shadow: 0 32px 90px rgba(0,0,0,.55) !important; }
-.site-app [class*="text-slate-500"],.site-app [class*="text-slate-400"] { color: #b8c2b9 !important; }
-.site-app [class*="text-slate-300"] { color: #dce4dc !important; }
-.site-app [class*="placeholder-slate-"]::placeholder { color: #aab6ac !important; opacity: 1; }
-.site-app [class*="fixed inset-0 z-50"] input,.site-app [class*="fixed inset-0 z-50"] select { color: #f6f7f2 !important; background: #111920 !important; border-color: rgba(229,238,227,.21) !important; }
+[class*="fixed inset-0 z-50"]:not(.arena-orig-modal) > div { border-color: rgba(214,247,106,.2); background-color: #111a17; box-shadow: 0 32px 90px rgba(0,0,0,.55); }
+.arena-orig-modal > div { background-color: #0C1226 !important; border-color: rgba(99, 102, 241, 0.45) !important; }
 button { transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .16s ease; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--lime) !important; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
