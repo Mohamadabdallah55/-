@@ -143,6 +143,14 @@ export default function App() {
         new URLSearchParams(window.location.search).get('remote') === 'true' ||
         new URLSearchParams(window.location.search).get('tab') === 'remote';
 
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (tabParam && ['match', 'arena', 'library', 'standings', 'timer', 'broadcast'].includes(tabParam)) {
+        setActiveTab(tabParam as any);
+      }
+      if (window.location.hash === '#arena' || window.location.hash === '#games') {
+        setActiveTab('arena');
+      }
+
       setIsStandaloneTimer(isTimer);
       setIsRemoteMode(isRemote);
     };
@@ -670,6 +678,10 @@ export default function App() {
               onSetCardStatus={handleSetCardStatus}
               onSetActiveGame={handleSetActiveGame}
               onResetAllBansPicks={handleResetAllBansPicks}
+              onSaveGameRules={(gameId, rules) => {
+                const target = games.find((g) => g.id === gameId);
+                if (target) handleSaveGame({ ...target, rules });
+              }}
             />
           </div>
         )}

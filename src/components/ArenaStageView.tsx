@@ -306,6 +306,15 @@ export const ArenaStageView: React.FC<ArenaStageViewProps> = ({
               const isWonByB = roundNum > currentMatch.teamAScore && roundNum <= totalWon;
               const isCurrent = roundNum === totalWon + 1 && !isMatchDecided;
 
+              const roundCategories: Record<number, { nameAr: string; icon: string; badgeClass: string }> = {
+                1: { nameAr: 'إلكتروني', icon: '🎮', badgeClass: 'text-sky-300 bg-sky-950/80 border-sky-800' },
+                2: { nameAr: 'ذكاء', icon: '🧠', badgeClass: 'text-emerald-300 bg-emerald-950/80 border-emerald-800' },
+                3: { nameAr: 'بدني', icon: '🏃', badgeClass: 'text-orange-300 bg-orange-950/80 border-orange-800' },
+                4: { nameAr: 'تصويت الجمهور', icon: '🔥', badgeClass: 'text-pink-200 bg-pink-950/90 border-pink-600 ring-1 ring-pink-500/50' },
+                5: { nameAr: '1 ضد 1', icon: '⚔️', badgeClass: 'text-rose-200 bg-rose-950/90 border-rose-600 ring-1 ring-rose-500/50' },
+              };
+              const catInfo = roundCategories[roundNum];
+
               return (
                 <div
                   key={roundNum}
@@ -324,6 +333,12 @@ export const ArenaStageView: React.FC<ArenaStageViewProps> = ({
                     {isWonByA && <CheckCircle2 className="w-3.5 h-3.5 text-purple-300" />}
                     {isWonByB && <CheckCircle2 className="w-3.5 h-3.5 text-cyan-300" />}
                     {isCurrent && <Play className="w-3 h-3 text-amber-400 fill-amber-400 animate-bounce" />}
+                  </div>
+
+                  <div className="mb-1.5">
+                    <span className={`text-[10px] font-bold font-changa px-2 py-0.5 rounded border inline-block truncate max-w-full ${catInfo.badgeClass}`}>
+                      {catInfo.icon} {catInfo.nameAr}
+                    </span>
                   </div>
 
                   <div className="text-xs font-black font-changa truncate">

@@ -86,15 +86,6 @@ export const CATEGORIES: CategoryInfo[] = [
     icon: 'activity',
   },
   {
-    id: '1v1',
-    nameAr: '1 ضد 1',
-    nameEn: '1V1',
-    description: 'مواجهة فردية مباشرة بين كباتن الفرق',
-    accentColor: '#EF4444', // Crimson / Red
-    glowColor: 'rgba(239, 68, 68, 0.4)',
-    icon: 'swords',
-  },
-  {
     id: 'fan_vote',
     nameAr: 'تصويت الجمهور',
     nameEn: 'FAN VOTE',
@@ -102,6 +93,15 @@ export const CATEGORIES: CategoryInfo[] = [
     accentColor: '#EC4899', // Pink / Magenta
     glowColor: 'rgba(236, 72, 153, 0.5)',
     icon: 'flame',
+  },
+  {
+    id: '1v1',
+    nameAr: '1 ضد 1',
+    nameEn: '1V1',
+    description: 'مواجهة فردية مباشرة وحاسمة بين ممثلي وكباتن الفرق (المواجهة الأخيرة)',
+    accentColor: '#EF4444', // Crimson / Red
+    glowColor: 'rgba(239, 68, 68, 0.4)',
+    icon: 'swords',
   },
 ];
 
@@ -304,6 +304,54 @@ export const DEFAULT_GAMES: GameItem[] = [
     nameEn: 'EA FC 27 1V1',
     description: 'مباراة شوط واحد ذهبي بين ممثلَي الفريقين',
     iconType: 'fc27',
+  },
+  {
+    id: 'g-arm-wrestling',
+    categoryId: '1v1',
+    nameAr: 'مكسر الأذرع (الرست)',
+    nameEn: 'ARM WRESTLING',
+    description: 'مواجهة بدنية مباشرة 1 ضد 1 لتثبيت يد الخصم على الطاولة',
+    iconType: 'fist',
+  },
+  {
+    id: 'g-tekken-1v1',
+    categoryId: '1v1',
+    nameAr: 'تيكن 8 (1 ضد 1)',
+    nameEn: 'TEKKEN 8 1V1',
+    description: 'نزال قتالي إلكتروني أسطوري 1 ضد 1 لحسم الجولة',
+    iconType: 'tekken',
+  },
+  {
+    id: 'g-reaction-duel',
+    categoryId: '1v1',
+    nameAr: 'مبارزة سرعة رد الفعل',
+    nameEn: 'REACTION DUEL',
+    description: 'تحدي استجابة عصبي 1 ضد 1، الأسرع في الضغط عند الإشارة الضوئية',
+    iconType: 'zap',
+  },
+  {
+    id: 'g-basketball-1v1',
+    categoryId: '1v1',
+    nameAr: 'رميات حرة (1 ضد 1)',
+    nameEn: 'FREE THROWS 1V1',
+    description: 'مواجهة تسديد رميات حرة مباشرة 1 ضد 1 بين كباتن الفريقين',
+    iconType: 'basketball',
+  },
+  {
+    id: 'g-power-duel-1v1',
+    categoryId: '1v1',
+    nameAr: 'مبارزة القوة والتحمل (1 ضد 1)',
+    nameEn: 'POWER DUEL 1V1',
+    description: 'تحدي بدني مباشر لاختبار الثبات والتوازن والتحمل',
+    iconType: 'swords',
+  },
+  {
+    id: 'g-quick-draw-1v1',
+    categoryId: '1v1',
+    nameAr: 'سرعة السحب والتصويب (1 ضد 1)',
+    nameEn: 'QUICK DRAW 1V1',
+    description: 'تحدي دقة وسرعة استجابة خاطفة 1 ضد 1 عند إشارة الانطلاق',
+    iconType: 'target',
   },
 
   // 5. تصويت الجمهور (FAN VOTE)

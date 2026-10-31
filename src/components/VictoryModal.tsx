@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Team, CurrentMatch } from '../types';
 import { GameIcon } from './GameIcons';
-import { Trophy, Sparkles, X, RotateCcw } from 'lucide-react';
+import { Trophy, Sparkles, X, Camera } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sound } from '../utils/audio';
 
@@ -12,6 +12,7 @@ interface VictoryModalProps {
   loserTeam: Team;
   currentMatch: CurrentMatch;
   onNextMatch?: () => void;
+  onOpenRecapModal?: () => void;
 }
 
 export const VictoryModal: React.FC<VictoryModalProps> = ({
@@ -21,6 +22,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   loserTeam,
   currentMatch,
   onNextMatch,
+  onOpenRecapModal,
 }) => {
   useEffect(() => {
     if (isOpen) {
@@ -130,14 +132,24 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-center gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+          {onOpenRecapModal && (
+            <button
+              onClick={onOpenRecapModal}
+              className="w-full sm:w-auto py-3 px-4 rounded-2xl bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/70 text-cyan-200 font-bold font-changa text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
+            >
+              <Camera className="w-4 h-4 text-cyan-400" />
+              <span>مشاركة ملخص المواجهة 📸</span>
+            </button>
+          )}
+
           {onNextMatch && (
             <button
               onClick={() => {
                 onClose();
                 onNextMatch();
               }}
-              className="flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-amber-500 via-purple-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white font-bold font-changa text-sm shadow-xl transition-all active:scale-95"
+              className="w-full sm:flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-amber-500 via-purple-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white font-bold font-changa text-xs sm:text-sm shadow-xl transition-all active:scale-95"
             >
               بدء مواجهة جديدة ⚔️
             </button>
@@ -145,7 +157,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
 
           <button
             onClick={onClose}
-            className="py-3 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold font-changa text-sm transition-colors"
+            className="w-full sm:w-auto py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold font-changa text-xs transition-colors"
           >
             إغلاق
           </button>
