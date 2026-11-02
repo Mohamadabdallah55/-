@@ -16,6 +16,34 @@ app.use(express.json());
 // In-memory synced state store for real-time mobile controller sync
 let syncedState: Record<string, unknown> = {};
 
+const PERSISTENT_STATE_TYPES = new Set([
+  'TEAMS_UPDATED',
+  'MATCH_UPDATED',
+  'HISTORY_UPDATED',
+  'CATEGORIES_UPDATED',
+  'CARDS_UPDATED',
+  'GAMES_UPDATED',
+  'ARENA_GAMES_UPDATED',
+  'LEAGUE_SETTINGS_UPDATED',
+  'TIMER_SYNC',
+  'BROADCAST_VIEW_UPDATED',
+  'REMOTE_RULES_MODAL',
+  'REMOTE_GAME_MODAL',
+]);
+
+function recordStateOrCommand(type: string, payload: unknown, cmdId?: string) {
+  if (PERSISTENT_STATE_TYPES.has(type)) {
+    syncedState[type] = payload;
+  } else {
+    syncedState.__LAST_COMMAND__ = {
+      type,
+      payload,
+      cmdId: cmdId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+    };
+  }
+}
+
 // Broadcast message to all connected clients
 function broadcast(message: string, senderWs?: WebSocket) {
   wss.clients.forEach((client) => {
@@ -26,14 +54,20 @@ function broadcast(message: string, senderWs?: WebSocket) {
 }
 
 wss.on('connection', (ws) => {
-  // Send existing state to newly connected client (e.g. phone)
-  ws.send(JSON.stringify({ type: 'FULL_STATE_SYNC', payload: syncedState }));
+  // Send existing persistent state to newly connected client (e.g. phone)
+  const initialSync: Record<string, unknown> = {};
+  Object.entries(syncedState).forEach(([k, v]) => {
+    if (k !== '__LAST_COMMAND__') {
+      initialSync[k] = v;
+    }
+  });
+  ws.send(JSON.stringify({ type: 'FULL_STATE_SYNC', payload: initialSync }));
 
   ws.on('message', (data) => {
     try {
       const parsed = JSON.parse(data.toString());
       if (parsed.type) {
-        syncedState[parsed.type] = parsed.payload;
+        recordStateOrCommand(parsed.type, parsed.payload, parsed.cmdId);
         // Broadcast to all other connected devices (e.g. PC/TV screen)
         broadcast(data.toString(), ws);
       }
@@ -49,14 +83,25 @@ wss.on('connection', (ws) => {
 
 // REST API fallback endpoints for mobile devices
 app.get('/api/state', (_req, res) => {
-  res.json(syncedState);
+  const responseState: Record<string, unknown> = {};
+  Object.entries(syncedState).forEach(([k, v]) => {
+    if (k === '__LAST_COMMAND__') {
+      const cmd = v as { timestamp?: number } | undefined;
+      if (cmd && typeof cmd.timestamp === 'number' && Date.now() - cmd.timestamp < 5000) {
+        responseState[k] = v;
+      }
+    } else {
+      responseState[k] = v;
+    }
+  });
+  res.json(responseState);
 });
 
 app.post('/api/state', (req, res) => {
-  const { type, payload } = req.body;
+  const { type, payload, cmdId } = req.body;
   if (type) {
-    syncedState[type] = payload;
-    broadcast(JSON.stringify({ type, payload }));
+    recordStateOrCommand(type, payload, cmdId);
+    broadcast(JSON.stringify({ type, payload, cmdId }));
   }
   res.json({ success: true, updated: type });
 });

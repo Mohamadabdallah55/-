@@ -75,20 +75,6 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
       if (type === 'ARENA_GAMES_UPDATED') {
         setColumnGamesMap(payload as Record<string, string[]>);
       }
-      if (type === 'REMOTE_RULES_MODAL') {
-        const gameId = payload as string | null;
-        if (!gameId) {
-          setRulesModalTarget(null);
-        } else {
-          const found = games.find((g) => g.id === gameId) || DEFAULT_GAMES.find((g) => g.id === gameId);
-          if (found) {
-            setRulesModalTarget({
-              game: found,
-              category: categories.find((c) => c.id === found.categoryId),
-            });
-          }
-        }
-      }
       if (type === 'REMOTE_GAME_MODAL') {
         const gameId = payload as string | null;
         if (!gameId) {

@@ -15,7 +15,7 @@ import {
   GameItem,
   LeagueSettings,
 } from './types';
-import { CATEGORIES } from './data/defaultGames';
+import { CATEGORIES, DEFAULT_GAMES } from './data/defaultGames';
 import {
   loadTeams,
   saveTeams,
@@ -56,6 +56,7 @@ import { HotkeysModal } from './components/HotkeysModal';
 import { SpotlightCard } from './components/SpotlightCard';
 import { CountUpValue } from './components/CountUpValue';
 import { LeagueSettingsModal } from './components/LeagueSettingsModal';
+import { GameRulesModal } from './components/GameRulesModal';
 
 declare global {
   interface Window {
@@ -188,6 +189,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<
     'match' | 'arena' | 'library' | 'standings' | 'timer' | 'broadcast'
   >('match');
+  const [broadcastView, setBroadcastView] = useState<'scoreboard' | 'games'>('scoreboard');
+  const [remoteRulesGameId, setRemoteRulesGameId] = useState<string | null>(null);
 
   // Modals
   const [isTeamsModalOpen, setIsTeamsModalOpen] = useState(false);
@@ -205,6 +208,12 @@ export default function App() {
       if (type === 'GAMES_UPDATED') setGames(payload as GameItem[]);
       if (type === 'ARENA_GAMES_UPDATED') setArenaColumnGames(payload as Record<string, string[]>);
       if (type === 'LEAGUE_SETTINGS_UPDATED') setLeagueSettings(payload as LeagueSettings);
+      if (type === 'BROADCAST_VIEW_UPDATED' && (payload === 'scoreboard' || payload === 'games')) {
+        setBroadcastView(payload);
+      }
+      if (type === 'REMOTE_RULES_MODAL') {
+        setRemoteRulesGameId(payload ? String(payload) : null);
+      }
       if (type === 'SWITCH_TAB_COMMAND') {
         const targetTab = payload as string;
         if (['match', 'arena', 'library', 'standings', 'timer', 'broadcast'].includes(targetTab)) {
@@ -231,13 +240,27 @@ export default function App() {
         setIsHotkeysModalOpen(false);
         setIsVictoryModalOpen(false);
         setIsMobileConnectModalOpen(false);
+        setRemoteRulesGameId(null);
       }
       if (type === 'SCROLL_PAGE_COMMAND') {
         const dir = payload as string;
-        if (dir === 'up') window.scrollBy({ top: -420, behavior: 'smooth' });
-        if (dir === 'down') window.scrollBy({ top: 420, behavior: 'smooth' });
-        if (dir === 'top') window.scrollTo({ top: 0, behavior: 'smooth' });
-        if (dir === 'bottom') window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        const overlayEl = document.querySelector('.broadcast-screen, .arena-orig-modal > div') as HTMLElement | null;
+        if (dir === 'up') {
+          window.scrollBy({ top: -420, behavior: 'smooth' });
+          overlayEl?.scrollBy({ top: -320, behavior: 'smooth' });
+        }
+        if (dir === 'down') {
+          window.scrollBy({ top: 420, behavior: 'smooth' });
+          overlayEl?.scrollBy({ top: 320, behavior: 'smooth' });
+        }
+        if (dir === 'top') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          overlayEl?.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        if (dir === 'bottom') {
+          window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+          if (overlayEl) overlayEl.scrollTo({ top: overlayEl.scrollHeight, behavior: 'smooth' });
+        }
       }
       if (type === 'STAGE_FX_COMMAND') {
         const fx = payload as string;
@@ -255,6 +278,7 @@ export default function App() {
               particleCount: 120,
               spread: 85,
               origin: { y: 0.6 },
+              zIndex: 9999,
               colors: ['#A855F7', '#06B6D4', '#F59E0B', '#10B981'],
             });
           } catch {}
@@ -273,6 +297,7 @@ export default function App() {
               particleCount: 120,
               spread: 80,
               origin: { y: 0.6 },
+              zIndex: 9999,
               colors: ['#A855F7', '#06B6D4', '#F59E0B', '#10B981'],
             });
           } catch {}
@@ -385,6 +410,7 @@ export default function App() {
         setIsHotkeysModalOpen(false);
         setIsVictoryModalOpen(false);
         setIsMobileConnectModalOpen(false);
+        setRemoteRulesGameId(null);
       }
     };
 
@@ -403,6 +429,16 @@ export default function App() {
     next[categoryId] = currentList;
     setArenaColumnGames(next);
     saveArenaColumnGames(next);
+  };
+
+  // Restore default column games (from phone or PC)
+  const handleResetColumnGames = () => {
+    const resetCopy: Record<string, string[]> = {};
+    Object.entries(DEFAULT_ARENA_COLUMN_GAMES).forEach(([k, v]) => {
+      resetCopy[k] = [...v];
+    });
+    setArenaColumnGames(resetCopy);
+    saveArenaColumnGames(resetCopy);
   };
 
   // Computed 6-Team Standings Table
@@ -433,6 +469,19 @@ export default function App() {
       if (newTeamId === nextMatch.teamAId) return;
       nextMatch.teamBId = newTeamId;
     }
+    setCurrentMatch(nextMatch);
+    saveCurrentMatch(nextMatch);
+  };
+
+  // Swap Team A and Team B positions & scores cleanly
+  const handleSwapTeams = () => {
+    const nextMatch: CurrentMatch = {
+      ...currentMatch,
+      teamAId: currentMatch.teamBId,
+      teamBId: currentMatch.teamAId,
+      teamAScore: currentMatch.teamBScore,
+      teamBScore: currentMatch.teamAScore,
+    };
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
@@ -501,6 +550,7 @@ export default function App() {
         particleCount: 120,
         spread: 80,
         origin: { y: 0.6 },
+        zIndex: 9999,
         colors: ['#A855F7', '#06B6D4', '#F59E0B', '#10B981'],
       });
     } catch {}
@@ -607,6 +657,13 @@ export default function App() {
     handleResetAllBansPicks();
   };
 
+  const remoteRulesGame = remoteRulesGameId
+    ? games.find((g) => g.id === remoteRulesGameId) || DEFAULT_GAMES.find((g) => g.id === remoteRulesGameId) || null
+    : null;
+  const remoteRulesCategory = remoteRulesGame
+    ? CATEGORIES.find((c) => c.id === remoteRulesGame.categoryId) || null
+    : null;
+
   // If Mobile Remote Mode, render dedicated smartphone controller
   if (isRemoteMode) {
     return (
@@ -623,12 +680,14 @@ export default function App() {
         leagueSettings={leagueSettings}
         onUpdateScore={handleUpdateScore}
         onChangeTeam={handleChangeTeam}
+        onSwapTeams={handleSwapTeams}
         onFinishMatch={handleFinishMatch}
         onResetCurrentMatch={handleResetCurrentMatch}
         onSetCardStatus={handleSetCardStatus}
         onSetActiveGame={handleSetActiveGame}
         onResetAllBansPicks={handleResetAllBansPicks}
         onChangeColumnGame={handleChangeColumnGame}
+        onResetColumnGames={handleResetColumnGames}
         onSelectCategories={handleSelectCategories}
         onSaveTeams={handleSaveTeams}
         onSaveGame={handleSaveGame}
@@ -793,16 +852,14 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: DEDICATED DUAL TIMER */}
-        {activeTab === 'timer' && (
-          <div className="page-section page-section-timer space-y-6 animate-fade-in">
-            <DualTimer
-              teamA={teamA}
-              teamB={teamB}
-              isStandalone={false}
-            />
-          </div>
-        )}
+        {/* TAB: DEDICATED DUAL TIMER (Kept mounted so phone timer & buzzer commands work instantaneously from any tab) */}
+        <div className={activeTab === 'timer' ? 'page-section page-section-timer space-y-6 animate-fade-in' : 'hidden'}>
+          <DualTimer
+            teamA={teamA}
+            teamB={teamB}
+            isStandalone={false}
+          />
+        </div>
 
         {/* TAB: BROADCAST OVERLAY */}
         {activeTab === 'broadcast' && (
@@ -814,6 +871,8 @@ export default function App() {
             categories={CATEGORIES}
             cardStates={cardStates}
             arenaColumnGames={arenaColumnGames}
+            initialView={broadcastView}
+            onViewChange={setBroadcastView}
             onClose={() => setActiveTab('match')}
           />
         )}
@@ -848,6 +907,19 @@ export default function App() {
         </div>
       </footer>
       </div>
+
+      {/* Global Game Rules Modal (Triggered from Phone or Arena) */}
+      {remoteRulesGame && (
+        <GameRulesModal
+          game={remoteRulesGame}
+          category={remoteRulesCategory}
+          onSaveRules={(gameId, rules) => {
+            const target = games.find((g) => g.id === gameId);
+            if (target) handleSaveGame({ ...target, rules });
+          }}
+          onClose={() => setRemoteRulesGameId(null)}
+        />
+      )}
 
       {/* Teams Customization Modal */}
       <TeamsModal

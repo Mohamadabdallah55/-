@@ -25,6 +25,8 @@ interface BroadcastOverlayProps {
   categories: CategoryInfo[];
   cardStates?: Record<string, { gameId: string; status: BanPickStatus }>;
   arenaColumnGames?: Record<string, string[]>;
+  initialView?: 'scoreboard' | 'games';
+  onViewChange?: (view: 'scoreboard' | 'games') => void;
   onClose: () => void;
 }
 
@@ -36,11 +38,17 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
   categories,
   cardStates = {},
   arenaColumnGames = {},
+  initialView = 'scoreboard',
+  onViewChange,
   onClose,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [broadcastView, setBroadcastView] = useState<'scoreboard' | 'games'>('scoreboard');
+  const [broadcastView, setBroadcastView] = useState<'scoreboard' | 'games'>(initialView);
   const broadcastRootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setBroadcastView(initialView);
+  }, [initialView]);
 
   useLayoutEffect(() => revealWithGsap(
     broadcastRootRef.current,
@@ -53,10 +61,11 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
     const unsub = subscribeToBroadcast((type, payload) => {
       if (type === 'BROADCAST_VIEW_UPDATED' && (payload === 'scoreboard' || payload === 'games')) {
         setBroadcastView(payload);
+        onViewChange?.(payload);
       }
     });
     return unsub;
-  }, []);
+  }, [onViewChange]);
 
   const teamA = teams.find((t) => t.id === currentMatch.teamAId) || teams[0];
   const teamB = teams.find((t) => t.id === currentMatch.teamBId) || teams[1] || teams[0];

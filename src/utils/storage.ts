@@ -44,9 +44,36 @@ if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
 // Active subscribers registry
 const subscribers = new Set<(type: string, payload: unknown) => void>();
 
+// Track processed command IDs so multi-transport delivery (WebRTC + WS + BroadcastChannel + HTTP poll) never double-fires
+const processedCommandIds = new Set<string>();
+
+function markCommandProcessed(cmdId?: string): boolean {
+  if (!cmdId) return true;
+  if (processedCommandIds.has(cmdId)) return false;
+  processedCommandIds.add(cmdId);
+  if (processedCommandIds.size > 300) {
+    const first = processedCommandIds.values().next().value;
+    if (first) processedCommandIds.delete(first);
+  }
+  return true;
+}
+
 // Real-Time WebSocket client for remote mobile controller
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+function applyCachedStatePayload(cachedState: Record<string, unknown>) {
+  Object.entries(cachedState).forEach(([type, payload]) => {
+    if (type === '__LAST_COMMAND__' && payload && typeof payload === 'object') {
+      const cmd = payload as { type?: string; payload?: unknown; cmdId?: string; timestamp?: number };
+      if (cmd.type && (!cmd.timestamp || Date.now() - cmd.timestamp < 5000)) {
+        syncIncomingUpdate(cmd.type, cmd.payload, cmd.cmdId);
+      }
+    } else {
+      syncIncomingUpdate(type, payload);
+    }
+  });
+}
 
 function connectWebSocket() {
   if (typeof window === 'undefined' || typeof WebSocket === 'undefined') return;
@@ -59,11 +86,9 @@ function connectWebSocket() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'FULL_STATE_SYNC' && data.payload) {
-          Object.entries(data.payload).forEach(([type, payload]) => {
-            syncIncomingUpdate(type, payload);
-          });
+          applyCachedStatePayload(data.payload);
         } else if (data.type) {
-          syncIncomingUpdate(data.type, data.payload);
+          syncIncomingUpdate(data.type, data.payload, data.cmdId);
         }
       } catch (err) {
         console.error('Error parsing remote message:', err);
@@ -97,9 +122,7 @@ if (typeof window !== 'undefined') {
     .then((r) => r.json())
     .then((cachedState) => {
       if (cachedState && typeof cachedState === 'object') {
-        Object.entries(cachedState).forEach(([type, payload]) => {
-          syncIncomingUpdate(type, payload);
-        });
+        applyCachedStatePayload(cachedState);
       }
     })
     .catch(() => {});
@@ -111,9 +134,7 @@ if (typeof window !== 'undefined') {
         .then((r) => r.json())
         .then((cachedState) => {
           if (cachedState && typeof cachedState === 'object') {
-            Object.entries(cachedState).forEach(([type, payload]) => {
-              syncIncomingUpdate(type, payload);
-            });
+            applyCachedStatePayload(cachedState);
           }
         })
         .catch(() => {});
@@ -141,7 +162,11 @@ function batchSetLocalStorage(key: string, value: string) {
   }
 }
 
-function syncIncomingUpdate(type: string, payload: unknown) {
+function syncIncomingUpdate(type: string, payload: unknown, cmdId?: string) {
+  if (cmdId && !markCommandProcessed(cmdId)) {
+    return;
+  }
+
   // Sync to local storage with throttled batching
   try {
     if (type === 'TEAMS_UPDATED') batchSetLocalStorage(STORAGE_KEYS.TEAMS, JSON.stringify(payload));
@@ -165,7 +190,12 @@ function syncIncomingUpdate(type: string, payload: unknown) {
 // Initialize WebRTC listener & provider for serverless peer sync (GitHub Pages & custom domains)
 if (typeof window !== 'undefined') {
   webrtcSync.onMessage((type, payload) => {
-    syncIncomingUpdate(type, payload);
+    if (payload && typeof payload === 'object' && '__cmdId' in (payload as Record<string, unknown>)) {
+      const wrapped = payload as { __cmdId: string; __data: unknown };
+      syncIncomingUpdate(type, wrapped.__data, wrapped.__cmdId);
+    } else {
+      syncIncomingUpdate(type, payload);
+    }
   });
 
   webrtcSync.setFullStateProvider(() => {
@@ -192,24 +222,34 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Broadcast to local tabs, server WebSocket, server REST, and serverless WebRTC (PeerJS)
+// Broadcast to local subscribers, local tabs, server WebSocket, server REST, and serverless WebRTC (PeerJS)
 export function broadcastMessage(type: string, payload: unknown) {
+  const cmdId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  markCommandProcessed(cmdId);
+
+  // 0. Immediately notify same-tab subscribers so local components stay in sync
+  subscribers.forEach((handler) => {
+    try {
+      handler(type, payload);
+    } catch {}
+  });
+
   // 1. WebRTC DataChannel (direct peer-to-peer between phone & laptop, 100% serverless)
   try {
-    webrtcSync.broadcast(type, payload);
+    webrtcSync.broadcast(type, { __cmdId: cmdId, __data: payload });
   } catch {}
 
   // 2. BroadcastChannel (same browser tabs)
   if (broadcastChannel) {
     try {
-      broadcastChannel.postMessage({ type, payload, timestamp: Date.now() });
+      broadcastChannel.postMessage({ type, payload, cmdId, timestamp: Date.now() });
     } catch {}
   }
 
   // 3. WebSocket (remote mobile phone / other devices if Node.js server available)
   if (socket && socket.readyState === WebSocket.OPEN) {
     try {
-      socket.send(JSON.stringify({ type, payload }));
+      socket.send(JSON.stringify({ type, payload, cmdId }));
     } catch {}
   } else {
     // 4. Fallback POST to server if socket is reconnecting
@@ -217,7 +257,7 @@ export function broadcastMessage(type: string, payload: unknown) {
       fetch('/api/state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, payload }),
+        body: JSON.stringify({ type, payload, cmdId }),
       }).catch(() => {});
     } catch {}
   }
@@ -229,6 +269,9 @@ export function subscribeToBroadcast(handler: (type: string, payload: unknown) =
   // BroadcastChannel listener
   const bcListener = (event: MessageEvent) => {
     if (event.data && event.data.type) {
+      if (event.data.cmdId && !markCommandProcessed(event.data.cmdId)) {
+        return;
+      }
       handler(event.data.type, event.data.payload);
     }
   };

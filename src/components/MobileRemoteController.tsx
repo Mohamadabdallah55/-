@@ -74,12 +74,14 @@ interface MobileRemoteControllerProps {
   leagueSettings?: LeagueSettings;
   onUpdateScore: (team: 'A' | 'B', delta: number) => void;
   onChangeTeam: (slot: 'A' | 'B', teamId: string) => void;
+  onSwapTeams?: () => void;
   onFinishMatch: () => void;
   onResetCurrentMatch: () => void;
   onSetCardStatus: (gameId: string, status: BanPickStatus) => void;
   onSetActiveGame: (gameId: string | null) => void;
   onResetAllBansPicks: () => void;
   onChangeColumnGame?: (categoryId: string, slotIndex: number, newGameId: string) => void;
+  onResetColumnGames?: () => void;
   onSelectCategories?: (cats: CategoryKey[]) => void;
   onSaveTeams?: (teams: Team[]) => void;
   onSaveGame?: (game: GameItem) => void;
@@ -104,12 +106,14 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   leagueSettings = { currentWeek: 2, pointsByWeek: { 1: 3, 2: 4, 3: 5 } },
   onUpdateScore,
   onChangeTeam,
+  onSwapTeams,
   onFinishMatch,
   onResetCurrentMatch,
   onSetCardStatus,
   onSetActiveGame,
   onResetAllBansPicks,
   onChangeColumnGame,
+  onResetColumnGames,
   onSelectCategories,
   onSaveTeams,
   onSaveGame,
@@ -226,7 +230,11 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   const handleRestoreDefaultGamesFromPhone = () => {
     triggerHaptic(35);
     sound.playTick();
-    saveArenaColumnGames(DEFAULT_ARENA_COLUMN_GAMES);
+    if (onResetColumnGames) {
+      onResetColumnGames();
+    } else {
+      saveArenaColumnGames(DEFAULT_ARENA_COLUMN_GAMES);
+    }
     showFeedback('✓ تم استعادة التشكيلة الافتراضية للألعاب على الشاشة');
   };
 
@@ -248,15 +256,18 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   const handleSwapTeamsPositions = () => {
     triggerHaptic(35);
     sound.playTick();
-    const nextMatch: CurrentMatch = {
-      ...currentMatch,
-      teamAId: currentMatch.teamBId,
-      teamBId: currentMatch.teamAId,
-      teamAScore: currentMatch.teamBScore,
-      teamBScore: currentMatch.teamAScore,
-    };
-    broadcastMessage('MATCH_UPDATED', nextMatch);
-    onChangeTeam('A', nextMatch.teamAId);
+    if (onSwapTeams) {
+      onSwapTeams();
+    } else {
+      const nextMatch: CurrentMatch = {
+        ...currentMatch,
+        teamAId: currentMatch.teamBId,
+        teamBId: currentMatch.teamAId,
+        teamAScore: currentMatch.teamBScore,
+        teamBScore: currentMatch.teamAScore,
+      };
+      broadcastMessage('MATCH_UPDATED', nextMatch);
+    }
     showFeedback('⇄ تم تبديل طرفي الفريقين على الشاشة');
   };
 
@@ -517,6 +528,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(20);
+                  sound.playTick();
                   broadcastMessage('STAGE_VIEW_COMMAND', true);
                   showFeedback('تم فتح شاشة المسرح الكاملة على اللابتوب');
                 }}
@@ -527,8 +539,21 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(20);
+                  sound.playTick();
+                  broadcastMessage('BROADCAST_VIEW_UPDATED', 'scoreboard');
                   broadcastMessage('SWITCH_TAB_COMMAND', 'broadcast');
+                  showFeedback('البث يعرض الآن: لوحة النتيجة');
+                }}
+                className="flex-1 py-1 px-2 rounded-lg bg-purple-950/80 border border-purple-500/50 text-purple-200 text-[10px] font-bold truncate active:scale-95"
+              >
+                بث النتيجة
+              </button>
+              <button
+                onClick={() => {
+                  triggerHaptic(20);
+                  sound.playTick();
                   broadcastMessage('BROADCAST_VIEW_UPDATED', 'games');
+                  broadcastMessage('SWITCH_TAB_COMMAND', 'broadcast');
                   showFeedback('البث يعرض الآن: ساحة الألعاب');
                 }}
                 className="flex-1 py-1 px-2 rounded-lg bg-cyan-950/80 border border-cyan-600/50 text-cyan-300 text-[10px] font-bold truncate active:scale-95"
@@ -538,7 +563,9 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(15);
+                  sound.playTick();
                   broadcastMessage('SCROLL_PAGE_COMMAND', 'up');
+                  showFeedback('▲ تم تمرير الشاشة لأعلى');
                 }}
                 className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 text-[10px] font-bold active:scale-95"
                 title="تمرير شاشة اللابتوب لأعلى"
@@ -548,7 +575,9 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(15);
+                  sound.playTick();
                   broadcastMessage('SCROLL_PAGE_COMMAND', 'down');
+                  showFeedback('▼ تم تمرير الشاشة لأسفل');
                 }}
                 className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 text-[10px] font-bold active:scale-95"
                 title="تمرير شاشة اللابتوب لأسفل"
@@ -558,13 +587,14 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(20);
+                  sound.playTick();
                   broadcastMessage('CLOSE_ALL_MODALS', true);
                   showFeedback('تم إغلاق النوافذ المنبثقة على اللابتوب');
                 }}
                 className="px-2 py-1 rounded-lg bg-rose-950/80 border border-rose-700/60 text-rose-300 text-[10px] font-bold active:scale-95"
                 title="إغلاق أي نافذة مفتوحة على اللابتوب"
               >
-                إغلاق النوافذ ✕
+                إغلاق ✕
               </button>
             </div>
           </div>
@@ -573,9 +603,22 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
 
       {/* Instant Action Feedback Toast */}
       {remoteFeedback && (
-        <div className="sticky top-[54px] z-30 px-3 py-2 bg-emerald-950 border-b border-emerald-500/80 text-emerald-200 text-xs font-bold text-center flex items-center justify-center gap-2 shadow-lg">
-          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span>{remoteFeedback}</span>
+        <div className="sticky top-[54px] z-30 px-3 py-2 bg-emerald-950 border-b border-emerald-500/80 text-emerald-200 text-xs font-bold text-center flex items-center justify-between gap-2 shadow-lg">
+          <div className="flex items-center gap-2 min-w-0">
+            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="truncate">{remoteFeedback}</span>
+          </div>
+          {onClose && (
+            <button
+              onClick={() => {
+                triggerHaptic(15);
+                onClose();
+              }}
+              className="px-2 py-0.5 rounded-lg bg-emerald-800/80 border border-emerald-400/50 text-white text-[10px] font-bold shrink-0"
+            >
+              معاينة الشاشة ↗
+            </button>
+          )}
         </div>
       )}
 
@@ -1355,10 +1398,9 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(45);
+                  sound.playPick('pick');
                   broadcastMessage('SWITCH_TAB_COMMAND', 'timer');
-                  setTimeout(() => {
-                    broadcastMessage('TIMER_COMMAND', { action: 'duel_start_both' });
-                  }, 150);
+                  broadcastMessage('TIMER_COMMAND', { action: 'duel_start_both' });
                   showFeedback('⚡ انطلق عداد الفريقين معاً!');
                 }}
                 className="py-3 px-3 rounded-2xl bg-amber-500 text-slate-950 font-black font-changa text-xs flex items-center justify-center gap-1.5 active:scale-95"
@@ -1370,6 +1412,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(25);
+                  sound.playTick();
                   broadcastMessage('TIMER_COMMAND', { action: 'duel_reset_both' });
                   showFeedback('تم تصفير عدادي الفريقين');
                 }}
@@ -1466,6 +1509,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
                   key={seconds}
                   onClick={() => {
                     triggerHaptic(15);
+                    sound.playTick();
                     setRemoteTimerSeconds(seconds);
                     broadcastMessage('TIMER_COMMAND', { action: 'set', seconds });
                     showFeedback(`تم ضبط العد التنازلي على ${seconds} ثانية`);
@@ -1485,10 +1529,9 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(35);
+                  sound.playPick('pick');
                   broadcastMessage('SWITCH_TAB_COMMAND', 'timer');
-                  setTimeout(() => {
-                    broadcastMessage('TIMER_COMMAND', { action: 'start', seconds: remoteTimerSeconds });
-                  }, 200);
+                  broadcastMessage('TIMER_COMMAND', { action: 'start', seconds: remoteTimerSeconds });
                   showFeedback(`بدأ العد التنازلي (${remoteTimerSeconds} ثانية)`);
                 }}
                 className="py-3 rounded-2xl bg-emerald-600 text-white font-bold font-changa text-xs flex items-center justify-center gap-1.5 active:scale-95"
@@ -1500,6 +1543,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(20);
+                  sound.playTick();
                   broadcastMessage('TIMER_COMMAND', { action: 'pause' });
                   showFeedback('تم إيقاف العد التنازلي مؤقتاً');
                 }}
@@ -1514,6 +1558,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(15);
+                  sound.playTick();
                   broadcastMessage('TIMER_COMMAND', { action: 'resume' });
                   showFeedback('تم استئناف العد التنازلي');
                 }}
@@ -1524,6 +1569,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(15);
+                  sound.playTick();
                   broadcastMessage('TIMER_COMMAND', { action: 'adjust', delta: 10 });
                   showFeedback('+10 ثوانٍ للمؤقت');
                 }}
@@ -1534,6 +1580,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(15);
+                  sound.playTick();
                   broadcastMessage('TIMER_COMMAND', { action: 'adjust', delta: -10 });
                   showFeedback('-10 ثوانٍ من المؤقت');
                 }}
@@ -1544,6 +1591,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(20);
+                  sound.playTick();
                   broadcastMessage('TIMER_COMMAND', { action: 'reset', seconds: remoteTimerSeconds });
                   showFeedback('تمت إعادة ضبط المؤقت');
                 }}
@@ -1572,6 +1620,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(25);
+                  sound.playTick();
                   broadcastMessage('STAGE_VIEW_COMMAND', true);
                   showFeedback('تم فتح شاشة المسرح (Arena Stage View)');
                 }}
@@ -1584,6 +1633,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(25);
+                  sound.playTick();
                   broadcastMessage('STAGE_VIEW_COMMAND', false);
                   broadcastMessage('CLOSE_ALL_MODALS', true);
                   showFeedback('تم إغلاق شاشة المسرح وجميع النوافذ');
@@ -1592,6 +1642,34 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               >
                 <X className="w-4 h-4" />
                 <span>إغلاق أي نافذة مفتوحة (ESC)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic(25);
+                  sound.playTick();
+                  broadcastMessage('BROADCAST_VIEW_UPDATED', 'scoreboard');
+                  broadcastMessage('SWITCH_TAB_COMMAND', 'broadcast');
+                  showFeedback('تم فتح شاشة البث: لوحة النتيجة المباشرة');
+                }}
+                className="py-3 px-3 rounded-2xl bg-purple-950/70 border border-purple-500/60 text-purple-200 font-bold text-xs flex items-center justify-center gap-1.5"
+              >
+                <Trophy className="w-4 h-4 text-purple-400" />
+                <span>بث لوحة النتيجة</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic(25);
+                  sound.playTick();
+                  broadcastMessage('BROADCAST_VIEW_UPDATED', 'games');
+                  broadcastMessage('SWITCH_TAB_COMMAND', 'broadcast');
+                  showFeedback('تم فتح شاشة البث: جدول الألعاب');
+                }}
+                className="py-3 px-3 rounded-2xl bg-cyan-950/70 border border-cyan-500/60 text-cyan-200 font-bold text-xs flex items-center justify-center gap-1.5"
+              >
+                <Layers className="w-4 h-4 text-cyan-400" />
+                <span>بث شاشة الألعاب</span>
               </button>
             </div>
 
