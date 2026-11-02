@@ -468,43 +468,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .arena-column-game.state-picked-b { border-color: rgba(6, 182, 212, 0.6); box-shadow: 0 0 18px rgba(6, 182, 212, 0.2); }
 .arena-footer-hint { color: #94a3b8; font-size: 12px; }
 
-/* Mobile match remote: a compact, thumb-friendly companion interface. */
-.mobile-remote-shell { min-height:100dvh; padding-bottom:110px !important; color:#f4f6ef !important; background:radial-gradient(ellipse at 50% -10%,rgba(216,242,122,.1),transparent 46%),#0b100f !important; }
-.remote-header { min-height:68px; padding:10px 15px !important; background:rgba(15,22,19,.96) !important; border-color:rgba(216,242,122,.16) !important; box-shadow:0 8px 24px rgba(0,0,0,.25) !important; backdrop-filter:blur(16px); }
-.remote-header > div:first-child > div:first-child { color:#d8f27a !important; background:linear-gradient(145deg,#273323,#17201b) !important; border:1px solid rgba(216,242,122,.4); box-shadow:none !important; }
-.remote-header p { color:#bdc8be !important; }.remote-header p span { color:#d8f27a !important; }
-.remote-director { margin:12px 12px 0; padding:13px !important; color:#f1f5ed; background:linear-gradient(145deg,#17211c,#121917) !important; border:1px solid rgba(216,242,122,.19) !important; border-radius:16px; box-shadow:0 12px 28px rgba(0,0,0,.2); }
-.remote-director > div:first-child { margin-bottom:10px !important; }
-.remote-director > div:first-child span:first-child { color:#f0f6ea !important; font-size:12px !important; }
-.remote-director > div:first-child svg { color:#d8f27a !important; }
-.remote-director > div:first-child span:last-child { color:#d8f27a !important; }
-.remote-director > .grid button { min-height:43px; padding:8px 5px !important; color:#eaf0e7 !important; background:#222d27 !important; border:1px solid rgba(232,241,226,.15) !important; border-radius:10px !important; font-size:11px !important; }
-.remote-director > .grid button:nth-child(2) { color:#17200d !important; background:#d8f27a !important; border-color:#eaffad !important; }
-.remote-director > div:last-child { color:#d9e2d6; border-color:rgba(235,244,231,.12) !important; }
-.remote-director > div:last-child > span { color:#b9c4ba !important; }
-.remote-director > div:last-child button { min-height:34px; color:#e9f1e5 !important; background:#222d27 !important; border-color:rgba(235,244,231,.17) !important; }
-.remote-director > div:last-child button:first-child { color:#17200d !important; background:#d8f27a !important; border-color:#eaffad !important; }
-.remote-tabs { position:fixed; z-index:70; inset-inline:12px; inset-block-end:calc(10px + env(safe-area-inset-bottom)); display:grid !important; grid-template-columns:1fr 1fr; gap:7px !important; margin:0; padding:7px !important; background:rgba(16,24,20,.96) !important; border:1px solid rgba(216,242,122,.22) !important; border-radius:16px; box-shadow:0 15px 45px rgba(0,0,0,.55); backdrop-filter:blur(18px); }
-.remote-tabs button { min-height:48px; color:#c0cbc0 !important; background:#202a24 !important; border:1px solid rgba(239,245,236,.12) !important; border-radius:10px !important; font-size:11px !important; }
-.remote-tabs button[class*="bg-purple-"],.remote-tabs button[class*="bg-cyan-"] { color:#18200e !important; background:#d8f27a !important; border-color:#edffad !important; box-shadow:0 5px 18px rgba(216,242,122,.14) !important; }
-.remote-content { padding:14px 12px 28px !important; }
-.remote-content > .grid:first-child button { min-height:42px; color:#efc2b2 !important; background:#30211d !important; border-color:#855746 !important; }
-.remote-content > .grid:first-child button:last-child { color:#e2edc8 !important; background:#222d24 !important; border-color:#657b42 !important; }
-.remote-content > div > button,.remote-content button { touch-action:manipulation; }
-.remote-content [class*="bg-gradient-to-r"] { color:#eef6e7 !important; background:linear-gradient(110deg,#19231e,#202b25) !important; border-color:rgba(216,242,122,.24) !important; }
-.remote-content [class*="text-cyan-"],.remote-content [class*="text-purple-"] { color:#e1ebb8 !important; }
-.remote-content [class*="bg-cyan-"],.remote-content [class*="bg-purple-"] { background-color:#253128 !important; }
-.remote-content [class*="border-cyan-"],.remote-content [class*="border-purple-"] { border-color:rgba(216,242,122,.34) !important; }
-.remote-content [class*="bg-slate-900"],.remote-content [class*="bg-[#0B0F24]"] { background:#18211d !important; }
-.remote-content [class*="text-slate-400"] { color:#b7c2b8 !important; }
-.remote-content select { min-height:40px; color:#f6f7f2 !important; background:#111a16 !important; }
-.remote-score-content > .grid:first-child > div { padding:11px !important; border-radius:12px !important; }
-.remote-score-content > .grid:first-child label { color:#e8f0dd !important; }
-.remote-score-content > .grid:nth-child(2) > div { min-height:176px; padding:15px !important; background:#17211c !important; border:1px solid rgba(216,242,122,.3) !important; border-radius:18px !important; }
-.remote-score-content > .grid:nth-child(2) > div h3 { color:#e8f3cd !important; }
-.remote-score-content > .grid:nth-child(2) > div > div:last-child button:last-child { color:#17200d !important; background:#d8f27a !important; }
-.remote-score-content > div:last-child button:first-child { color:#17200d !important; background:linear-gradient(135deg,#e8ffab,#c4e862) !important; }
-.remote-feedback { color:#eaffad !important; background:#24311e !important; border-color:#a4c455 !important; }
+/* Mobile match remote uses its own clean Tailwind styling in MobileRemoteController.tsx */
 @media (max-width: 1200px) {
   .arena-column-grid { grid-template-columns: repeat(5, minmax(200px, 1fr)); width: max-content; min-width: 100%; gap: 12px; }
   .arena-columns-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -513,10 +477,6 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   .arena-columns-heading h2 { font-size: 20px; }
   .arena-columns-heading p { max-width: 250px; font-size: 11px; }
   .arena-column-grid { grid-template-columns: repeat(5, minmax(190px, 1fr)); width: max-content; gap: 10px; }
-  .remote-director { margin: 9px 9px 0; padding: 11px !important; }
-  .remote-director > div:last-child { align-items: flex-start !important; flex-direction: column; }
-  .remote-director > div:last-child > div { width: 100%; display: grid !important; grid-template-columns: 1fr 1fr; }
-  .remote-content { padding: 12px 10px 25px !important; }
 }
 
 /* Field timer becomes the visual centre of a live round. */

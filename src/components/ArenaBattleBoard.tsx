@@ -75,8 +75,36 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
       if (type === 'ARENA_GAMES_UPDATED') {
         setColumnGamesMap(payload as Record<string, string[]>);
       }
+      if (type === 'REMOTE_RULES_MODAL') {
+        const gameId = payload as string | null;
+        if (!gameId) {
+          setRulesModalTarget(null);
+        } else {
+          const found = games.find((g) => g.id === gameId) || DEFAULT_GAMES.find((g) => g.id === gameId);
+          if (found) {
+            setRulesModalTarget({
+              game: found,
+              category: categories.find((c) => c.id === found.categoryId),
+            });
+          }
+        }
+      }
+      if (type === 'REMOTE_GAME_MODAL') {
+        const gameId = payload as string | null;
+        if (!gameId) {
+          setSelectedGameForModal(null);
+        } else {
+          const found = games.find((g) => g.id === gameId) || DEFAULT_GAMES.find((g) => g.id === gameId);
+          if (found) setSelectedGameForModal(found);
+        }
+      }
+      if (type === 'CLOSE_ALL_MODALS') {
+        setSelectedGameForModal(null);
+        setRulesModalTarget(null);
+        setPickerTarget(null);
+      }
     });
-  }, []);
+  }, [games, categories]);
 
   // Universal Library Picker Modal State (for changing ANY slot in ANY of the 5 categories)
   const [pickerTarget, setPickerTarget] = useState<{

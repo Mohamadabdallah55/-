@@ -208,7 +208,74 @@ export default function App() {
       if (type === 'SWITCH_TAB_COMMAND') {
         const targetTab = payload as string;
         if (['match', 'arena', 'library', 'standings', 'timer', 'broadcast'].includes(targetTab)) {
+          setIsStageViewOpen(false);
           setActiveTab(targetTab as any);
+        }
+      }
+      if (type === 'STAGE_VIEW_COMMAND') {
+        setIsStageViewOpen(Boolean(payload));
+      }
+      if (type === 'OPEN_MODAL_COMMAND') {
+        const modal = payload as string;
+        setIsTeamsModalOpen(modal === 'teams');
+        setIsHistoryModalOpen(modal === 'history');
+        setIsLeagueSettingsOpen(modal === 'settings');
+        setIsHotkeysModalOpen(modal === 'hotkeys');
+        setIsMobileConnectModalOpen(modal === 'connect');
+      }
+      if (type === 'CLOSE_ALL_MODALS') {
+        setIsStageViewOpen(false);
+        setIsTeamsModalOpen(false);
+        setIsHistoryModalOpen(false);
+        setIsLeagueSettingsOpen(false);
+        setIsHotkeysModalOpen(false);
+        setIsVictoryModalOpen(false);
+        setIsMobileConnectModalOpen(false);
+      }
+      if (type === 'SCROLL_PAGE_COMMAND') {
+        const dir = payload as string;
+        if (dir === 'up') window.scrollBy({ top: -420, behavior: 'smooth' });
+        if (dir === 'down') window.scrollBy({ top: 420, behavior: 'smooth' });
+        if (dir === 'top') window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (dir === 'bottom') window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }
+      if (type === 'STAGE_FX_COMMAND') {
+        const fx = payload as string;
+        if (fx === 'bell') sound.playRoundBell();
+        if (fx === 'buzzer') sound.playBuzzer();
+        if (fx === 'point_a') sound.playScorePoint(true);
+        if (fx === 'point_b') sound.playScorePoint(false);
+        if (fx === 'shake') {
+          setIsScreenShaking(true);
+          setTimeout(() => setIsScreenShaking(false), 500);
+        }
+        if (fx === 'confetti') {
+          try {
+            confetti({
+              particleCount: 120,
+              spread: 85,
+              origin: { y: 0.6 },
+              colors: ['#A855F7', '#06B6D4', '#F59E0B', '#10B981'],
+            });
+          } catch {}
+        }
+      }
+      if (type === 'VICTORY_CELEBRATION_COMMAND' && payload && typeof payload === 'object') {
+        const { winner, loser } = payload as { winner: Team; loser: Team };
+        if (winner && loser) {
+          setIsScreenShaking(true);
+          setTimeout(() => setIsScreenShaking(false), 500);
+          setVictoryWinner(winner);
+          setVictoryLoser(loser);
+          setIsVictoryModalOpen(true);
+          try {
+            confetti({
+              particleCount: 120,
+              spread: 80,
+              origin: { y: 0.6 },
+              colors: ['#A855F7', '#06B6D4', '#F59E0B', '#10B981'],
+            });
+          } catch {}
         }
       }
     });
@@ -548,8 +615,12 @@ export default function App() {
         teams={teams}
         games={games}
         categories={CATEGORIES}
+        selectedCategories={selectedCategories}
         cardStates={cardStates}
         arenaColumnGames={arenaColumnGames}
+        standings={standings}
+        matchesHistory={matchesHistory}
+        leagueSettings={leagueSettings}
         onUpdateScore={handleUpdateScore}
         onChangeTeam={handleChangeTeam}
         onFinishMatch={handleFinishMatch}
@@ -558,6 +629,15 @@ export default function App() {
         onSetActiveGame={handleSetActiveGame}
         onResetAllBansPicks={handleResetAllBansPicks}
         onChangeColumnGame={handleChangeColumnGame}
+        onSelectCategories={handleSelectCategories}
+        onSaveTeams={handleSaveTeams}
+        onSaveGame={handleSaveGame}
+        onSaveLeagueSettings={(s) => {
+          setLeagueSettings(s);
+          saveLeagueSettings(s);
+        }}
+        onDeleteMatch={handleDeleteMatch}
+        onResetLeague={handleResetLeague}
         onClose={() => {
           if (window.location.hash === '#remote') {
             window.location.hash = '';

@@ -93,8 +93,27 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   // Commands sent from the phone remote. Keeping this listener inside the timer
   // makes the same controls work in the main tab and the standalone timer screen.
   useEffect(() => subscribeToBroadcast((type, payload) => {
+    if (type === 'STOP_TIMER_P1') {
+      sound.playPick('ban');
+      setTeamAActive(false);
+      setTeamAFinished(true);
+      return;
+    }
+    if (type === 'STOP_TIMER_P2') {
+      sound.playPick('ban');
+      setTeamBActive(false);
+      setTeamBFinished(true);
+      return;
+    }
     if (type !== 'TIMER_COMMAND' || !payload || typeof payload !== 'object') return;
-    const command = payload as { action?: string; seconds?: number };
+    const command = payload as {
+      action?: string;
+      seconds?: number;
+      delta?: number;
+      target?: number;
+      blind?: boolean;
+      mode?: 'none' | 'countdown' | 'stopwatch';
+    };
     const seconds = Math.max(1, Math.min(3600, Number(command.seconds) || countdownInitial));
     if (command.action === 'set') {
       setCountdownActive(false);
@@ -107,11 +126,53 @@ export const DualTimer: React.FC<DualTimerProps> = ({
       setCountdownActive(true);
       setExpandedTimer('countdown');
     }
-    if (command.action === 'pause') setCountdownActive(false);
+    if (command.action === 'resume') {
+      setCountdownActive(true);
+    }
+    if (command.action === 'pause') {
+      setCountdownActive(false);
+    }
     if (command.action === 'reset') {
       setCountdownActive(false);
       setCountdownInitial(seconds);
       setCountdownLeft(seconds);
+    }
+    if (command.action === 'adjust' && typeof command.delta === 'number') {
+      setCountdownLeft((prev) => Math.max(1, Math.min(3600, prev + command.delta!)));
+    }
+    if (command.action === 'set_target' && typeof command.target === 'number') {
+      setTargetSeconds(Math.max(1, Math.min(300, command.target)));
+    }
+    if (command.action === 'set_blind' && typeof command.blind === 'boolean') {
+      setIsBlindChallenge(command.blind);
+    }
+    if (command.action === 'expand' && command.mode) {
+      setExpandedTimer(command.mode);
+    }
+    if (command.action === 'duel_start_both') {
+      sound.playPick('pick');
+      setTeamAMs(0);
+      setTeamBMs(0);
+      setTeamAFinished(false);
+      setTeamBFinished(false);
+      setTeamAActive(true);
+      setTeamBActive(true);
+      setExpandedTimer('stopwatch');
+    }
+    if (command.action === 'duel_reset_both') {
+      sound.playTick();
+      setTeamAActive(false);
+      setTeamBActive(false);
+      setTeamAFinished(false);
+      setTeamBFinished(false);
+      setTeamAMs(0);
+      setTeamBMs(0);
+    }
+    if (command.action === 'duel_toggle_a') {
+      duelStateRef.current.handleToggleTeamA();
+    }
+    if (command.action === 'duel_toggle_b') {
+      duelStateRef.current.handleToggleTeamB();
     }
   }), [countdownInitial]);
 
