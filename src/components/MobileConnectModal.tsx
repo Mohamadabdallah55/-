@@ -15,6 +15,11 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { webrtcSync } from '../utils/webrtcSync';
+import {
+  subscribeToConnectionStatus,
+  pushHostStateToServer,
+  forceReconnectAll,
+} from '../utils/storage';
 
 interface MobileConnectModalProps {
   isOpen: boolean;
@@ -36,19 +41,20 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
   const [clientCount, setClientCount] = useState<number>(0);
   const [roomCode, setRoomCode] = useState<string>(() => webrtcSync.getRoomCode());
 
-  // Listen to live WebRTC connection status with Google STUN servers
+  // Listen to unified live connection status (WebSocket + HTTP Server + WebRTC)
   useEffect(() => {
-    return webrtcSync.onStatusChange((status, count) => {
+    return subscribeToConnectionStatus((status, count) => {
       setConnStatus(status);
       setClientCount(count);
       setRoomCode(webrtcSync.getRoomCode());
     });
   }, []);
 
-  // Derive the deployed base path at runtime. This includes /<repo>/ on GitHub Pages.
+  // Derive the deployed base path at runtime.
+  // Automatically converts private `ais-dev-` preview origin to public `ais-pre-` shared origin so phones can open without login.
   const getCurrentDeploymentBase = () => {
     if (typeof window === 'undefined') return '';
-    const origin = window.location.origin;
+    const origin = window.location.origin.replace(/^https:\/\/ais-dev-/, 'https://ais-pre-');
     const pathname = window.location.pathname
       .replace(/\/index\.html$/, '')
       .replace(/\/remote\/?$/, '')
@@ -58,12 +64,14 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
 
   const effectiveBase = customDomain.trim().replace(/\/+$/, '') || getCurrentDeploymentBase();
 
-  // This resolves to the active Vercel/custom-domain host or the GitHub Pages project path.
+  // This resolves to the active Vercel/custom-domain/shared host or the GitHub Pages project path.
   const remoteUrl = `${effectiveBase}/?mode=remote&room=${roomCode}#remote`;
 
   useEffect(() => {
     if (isOpen) {
+      setRoomCode(webrtcSync.getRoomCode());
       setTempDomainInput(customDomain || getCurrentDeploymentBase());
+      pushHostStateToServer();
     }
   }, [isOpen, customDomain]);
 
@@ -134,16 +142,16 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             <h2 className="text-lg sm:text-xl font-bold font-changa text-white flex items-center gap-2">
               <span>التحكم بالدوري من الهاتف</span>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                clientCount > 0
+                clientCount > 0 || connStatus === 'connected'
                   ? 'bg-emerald-950 text-emerald-300 border border-emerald-600'
                   : 'bg-indigo-950 text-indigo-300 border border-indigo-700'
               }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${clientCount > 0 ? 'bg-emerald-400 animate-ping' : 'bg-indigo-400'}`} />
-                {clientCount > 0 ? `ONLINE (${clientCount}) 🟢` : 'READY TO CONNECT'}
+                <span className={`w-1.5 h-1.5 rounded-full ${clientCount > 0 || connStatus === 'connected' ? 'bg-emerald-400 animate-ping' : 'bg-indigo-400'}`} />
+                {clientCount > 0 ? `ONLINE (${clientCount}) 🟢` : connStatus === 'connected' ? 'SERVER READY 🟢' : 'CONNECTING...'}
               </span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              امسح الكود بكاميرا هاتفك للتحكم المباشر في النتيجة والألعاب عبر شبكات 4G/5G
+              امسح الكود بكاميرا هاتفك للتحكم المباشر في النتيجة والألعاب عبر شبكات Wi-Fi أو 4G/5G
             </p>
           </div>
         </div>
@@ -155,15 +163,16 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
               <Globe className="w-4 h-4 text-cyan-400" />
               <span>رابط التحكم من الهاتف:</span>
             </span>
-            {isUsingCustomDomain ? (
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
-                نطاق يدوي لهذه الجلسة
-              </span>
-            ) : (
-              <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">
-                يتبع رابط الموقع المنشور تلقائياً
-              </span>
-            )}
+            <button
+              onClick={() => {
+                forceReconnectAll();
+                setRoomCode(webrtcSync.getRoomCode());
+              }}
+              className="text-[10px] bg-indigo-950 hover:bg-indigo-900 text-indigo-200 border border-indigo-500/50 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>تحديث الاتصال</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -197,7 +206,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             )}
           </div>
           <p className="text-[10px] text-slate-500 leading-relaxed">
-            الرابط يتبع عنوان النشر المفتوح تلقائياً، بما فيه مسار GitHub Pages. بعد ربط دومينك، افتح الموقع عليه وسيستخدمه الريموت تلقائياً.
+            الرابط يتبع عنوان النشر المفتوح تلقائياً، بما فيه مسار المشاركة المباشر للهاتف.
           </p>
         </div>
 
@@ -221,7 +230,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             <div className="flex items-center justify-center gap-1.5 mt-1 flex-wrap">
               <span className="text-[10px] text-emerald-800 bg-emerald-100 font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                <span>Google STUN 4G/5G Ready</span>
+                <span>Multi-Channel Sync (WS + HTTP + WebRTC)</span>
               </span>
               <span className="text-[10px] text-purple-800 bg-purple-100 font-mono font-bold px-2 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
                 <Wifi className="w-3 h-3 text-purple-600" />

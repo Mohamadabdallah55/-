@@ -16,6 +16,8 @@ import {
   broadcastMessage,
   DEFAULT_ARENA_COLUMN_GAMES,
   saveArenaColumnGames,
+  subscribeToConnectionStatus,
+  forceReconnectAll,
 } from '../utils/storage';
 import { DEFAULT_GAMES } from '../data/defaultGames';
 import { webrtcSync } from '../utils/webrtcSync';
@@ -150,11 +152,14 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
 
   // Connection state
   const [connStatus, setConnStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
-  const roomCode = webrtcSync.getRoomCode();
+  const [roomCode, setRoomCodeState] = useState<string>(() => webrtcSync.getRoomCode());
+  const [isEditingRoom, setIsEditingRoom] = useState<boolean>(false);
+  const [roomInputDraft, setRoomInputDraft] = useState<string>('');
 
   useEffect(() => {
-    return webrtcSync.onStatusChange((status) => {
+    return subscribeToConnectionStatus((status) => {
       setConnStatus(status);
+      setRoomCodeState(webrtcSync.getRoomCode());
     });
   }, []);
 
@@ -401,36 +406,63 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
       <header className="sticky top-0 z-40 bg-[#0A0F22] border-b border-slate-800/90 px-3 py-2.5 shadow-lg">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shrink-0">
+            <button
+              onClick={() => {
+                triggerHaptic(25);
+                sound.playTick();
+                forceReconnectAll();
+                setRoomCodeState(webrtcSync.getRoomCode());
+                showFeedback('🔄 تم تحديث الاتصال والمزامنة مع الشاشة مباشرة');
+              }}
+              className="w-8 h-8 rounded-xl bg-indigo-600 active:bg-indigo-500 flex items-center justify-center text-white shrink-0"
+              title="اضغط لإعادة تنشيط الاتصال فوراً"
+            >
               <Smartphone className="w-4 h-4" />
-            </div>
+            </button>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <h1 className="font-changa font-bold text-xs sm:text-sm text-white truncate">
                   ريموت التحكم الشامل
                 </h1>
-                <span className="text-[10px] font-mono text-cyan-300 font-bold">
+                <button
+                  onClick={() => {
+                    triggerHaptic(15);
+                    setRoomInputDraft(roomCode);
+                    setIsEditingRoom((prev) => !prev);
+                  }}
+                  className="text-[10px] font-mono text-cyan-300 font-bold bg-cyan-950/70 border border-cyan-500/40 px-1.5 py-0.5 rounded-md active:scale-95"
+                  title="اضغط لتغيير رقم الغرفة أو مطابقته مع اللابتوب"
+                >
                   #{roomCode}
-                </span>
+                </button>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+              <button
+                onClick={() => {
+                  triggerHaptic(20);
+                  sound.playTick();
+                  forceReconnectAll();
+                  setRoomCodeState(webrtcSync.getRoomCode());
+                  showFeedback('🔄 جاري إعادة الاتصال ومزامنة البيانات...');
+                }}
+                className="flex items-center gap-1.5 text-[10px] text-slate-300 hover:text-white"
+              >
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
                     connStatus === 'connected'
                       ? 'bg-emerald-400'
                       : connStatus === 'connecting'
-                      ? 'bg-amber-400'
+                      ? 'bg-amber-400 animate-pulse'
                       : 'bg-rose-400'
                   }`}
                 />
                 <span>
                   {connStatus === 'connected'
-                    ? 'متصل بالشاشة مباشرة'
+                    ? 'متصل بالشاشة مباشرة 🟢'
                     : connStatus === 'connecting'
-                    ? 'جاري المزامنة...'
-                    : 'مزامنة محلية'}
+                    ? 'جاري الاتصال... (اضغط للتحديث)'
+                    : 'اضغط هنا لإعادة الاتصال 🔄'}
                 </span>
-              </div>
+              </button>
             </div>
           </div>
 
@@ -495,6 +527,50 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
             )}
           </div>
         </div>
+
+        {/* Manual Room Code Pairing Drawer (if user taps #ELITE-XXXX) */}
+        {isEditingRoom && (
+          <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-cyan-300 shrink-0">رمز الغرفة:</span>
+            <input
+              type="text"
+              dir="ltr"
+              value={roomInputDraft}
+              onChange={(e) => setRoomInputDraft(e.target.value.toUpperCase())}
+              placeholder="مثال: ELITE-1234"
+              className="flex-1 bg-[#060913] border border-cyan-500/50 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none"
+            />
+            <button
+              onClick={() => {
+                triggerHaptic(25);
+                const cleaned = roomInputDraft.trim().toUpperCase();
+                if (cleaned) {
+                  webrtcSync.setRoomCode(cleaned);
+                  setRoomCodeState(webrtcSync.getRoomCode());
+                  forceReconnectAll();
+                  showFeedback(`✓ تم الربط مع غرفة #${webrtcSync.getRoomCode()}`);
+                }
+                setIsEditingRoom(false);
+              }}
+              className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold shrink-0"
+            >
+              ربط
+            </button>
+            <button
+              onClick={() => {
+                triggerHaptic(20);
+                forceReconnectAll();
+                setRoomCodeState(webrtcSync.getRoomCode());
+                setIsEditingRoom(false);
+                showFeedback('🔄 تم تحديث الاتصال تلقائياً');
+              }}
+              className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold shrink-0 flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>تحديث</span>
+            </button>
+          </div>
+        )}
 
         {/* Collapsible Quick Screen Switcher Bar (التنقل الكامل بين صفحات الموقع بدون ماوس) */}
         {showQuickScreenBar && (

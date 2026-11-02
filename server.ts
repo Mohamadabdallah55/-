@@ -11,10 +11,28 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+
+// Allow cross-origin sync between ais-dev / ais-pre / custom domains
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
 
 // In-memory synced state store for real-time mobile controller sync
 let syncedState: Record<string, unknown> = {};
+let recentCommands: Array<{
+  type: string;
+  payload: unknown;
+  cmdId: string;
+  timestamp: number;
+}> = [];
 
 const PERSISTENT_STATE_TYPES = new Set([
   'TEAMS_UPDATED',
@@ -29,18 +47,36 @@ const PERSISTENT_STATE_TYPES = new Set([
   'BROADCAST_VIEW_UPDATED',
   'REMOTE_RULES_MODAL',
   'REMOTE_GAME_MODAL',
+  'HOST_ROOM_CODE',
 ]);
 
 function recordStateOrCommand(type: string, payload: unknown, cmdId?: string) {
+  if (type === 'BULK_STATE_SYNC' && payload && typeof payload === 'object') {
+    Object.entries(payload as Record<string, unknown>).forEach(([k, v]) => {
+      if (PERSISTENT_STATE_TYPES.has(k)) {
+        syncedState[k] = v;
+      }
+    });
+    return;
+  }
+
   if (PERSISTENT_STATE_TYPES.has(type)) {
     syncedState[type] = payload;
   } else {
-    syncedState.__LAST_COMMAND__ = {
-      type,
-      payload,
-      cmdId: cmdId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      timestamp: Date.now(),
-    };
+    const now = Date.now();
+    recentCommands = recentCommands.filter((c) => now - c.timestamp < 6000);
+    const id = cmdId || `${now}-${Math.random().toString(36).slice(2, 8)}`;
+    if (!recentCommands.some((c) => c.cmdId === id)) {
+      recentCommands.push({
+        type,
+        payload,
+        cmdId: id,
+        timestamp: now,
+      });
+      if (recentCommands.length > 30) {
+        recentCommands = recentCommands.slice(-30);
+      }
+    }
   }
 }
 
@@ -57,11 +93,18 @@ wss.on('connection', (ws) => {
   // Send existing persistent state to newly connected client (e.g. phone)
   const initialSync: Record<string, unknown> = {};
   Object.entries(syncedState).forEach(([k, v]) => {
-    if (k !== '__LAST_COMMAND__') {
-      initialSync[k] = v;
-    }
+    initialSync[k] = v;
   });
-  ws.send(JSON.stringify({ type: 'FULL_STATE_SYNC', payload: initialSync }));
+  ws.send(
+    JSON.stringify({
+      type: 'FULL_STATE_SYNC',
+      payload: initialSync,
+      clientsCount: wss.clients.size,
+    })
+  );
+
+  // Notify all clients of updated connection count
+  broadcast(JSON.stringify({ type: 'CLIENTS_COUNT_UPDATED', payload: wss.clients.size }));
 
   ws.on('message', (data) => {
     try {
@@ -76,6 +119,10 @@ wss.on('connection', (ws) => {
     }
   });
 
+  ws.on('close', () => {
+    broadcast(JSON.stringify({ type: 'CLIENTS_COUNT_UPDATED', payload: wss.clients.size }));
+  });
+
   ws.on('error', (err) => {
     console.error('WebSocket client error:', err);
   });
@@ -83,17 +130,13 @@ wss.on('connection', (ws) => {
 
 // REST API fallback endpoints for mobile devices
 app.get('/api/state', (_req, res) => {
-  const responseState: Record<string, unknown> = {};
-  Object.entries(syncedState).forEach(([k, v]) => {
-    if (k === '__LAST_COMMAND__') {
-      const cmd = v as { timestamp?: number } | undefined;
-      if (cmd && typeof cmd.timestamp === 'number' && Date.now() - cmd.timestamp < 5000) {
-        responseState[k] = v;
-      }
-    } else {
-      responseState[k] = v;
-    }
-  });
+  const now = Date.now();
+  recentCommands = recentCommands.filter((c) => now - c.timestamp < 6000);
+  const responseState: Record<string, unknown> = {
+    ...syncedState,
+    __RECENT_COMMANDS__: recentCommands,
+    __CLIENTS_COUNT__: wss.clients.size,
+  };
   res.json(responseState);
 });
 
@@ -103,12 +146,12 @@ app.post('/api/state', (req, res) => {
     recordStateOrCommand(type, payload, cmdId);
     broadcast(JSON.stringify({ type, payload, cmdId }));
   }
-  res.json({ success: true, updated: type });
+  res.json({ success: true, updated: type, clientsCount: wss.clients.size });
 });
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', clientsCount: wss.clients.size });
+  res.json({ status: 'ok', clientsCount: wss.clients.size, roomCode: syncedState.HOST_ROOM_CODE || null });
 });
 
 async function start() {

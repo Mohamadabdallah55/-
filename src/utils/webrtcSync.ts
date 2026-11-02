@@ -3,7 +3,7 @@ import { Peer, DataConnection } from 'peerjs';
 type MessageHandler = (type: string, payload: unknown) => void;
 type StatusHandler = (status: 'connected' | 'connecting' | 'disconnected', clientCount: number) => void;
 
-// High-reliability Google STUN servers for NAT / Firewall traversal on mobile 4G/5G carriers
+// High-reliability Google & Cloudflare STUN + OpenRelay TURN servers for NAT / Firewall traversal on mobile 4G/5G carriers
 const PEER_ICE_CONFIG = {
   config: {
     iceServers: [
@@ -12,6 +12,22 @@ const PEER_ICE_CONFIG = {
       { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
     ],
   },
 };
@@ -30,6 +46,7 @@ class WebRTCSyncManager {
   private heartbeatTimer: number | null = null;
   private lastPongAt: number = Date.now();
   private reconnectAttempts: number = 0;
+  private hostIdRetryCount: number = 0;
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -45,23 +62,41 @@ class WebRTCSyncManager {
       params.get('tab') === 'remote';
 
     if (roomFromUrl) {
-      this.roomCode = roomFromUrl.toUpperCase();
+      this.roomCode = roomFromUrl.toUpperCase().trim();
+      try {
+        localStorage.setItem('tahadi5_active_room', this.roomCode);
+        localStorage.setItem('tahadi5_host_room', this.roomCode);
+      } catch {}
       this.isHost = false;
     } else if (isRemote) {
-      const saved = localStorage.getItem('tahadi5_active_room');
+      const saved =
+        localStorage.getItem('tahadi5_active_room') ||
+        localStorage.getItem('tahadi5_host_room');
       this.roomCode = saved || 'ELITE-ARENA';
       this.isHost = false;
     } else {
       // Host screen (Laptop / PC): generate or reuse persistent room code
-      let hostCode = localStorage.getItem('tahadi5_host_room');
+      let hostCode =
+        localStorage.getItem('tahadi5_host_room') ||
+        localStorage.getItem('tahadi5_active_room');
       if (!hostCode) {
         const rand = Math.floor(1000 + Math.random() * 9000);
         hostCode = `ELITE-${rand}`;
-        localStorage.setItem('tahadi5_host_room', hostCode);
       }
+      try {
+        localStorage.setItem('tahadi5_host_room', hostCode);
+        localStorage.setItem('tahadi5_active_room', hostCode);
+      } catch {}
       this.roomCode = hostCode;
       this.isHost = true;
     }
+
+    // Cleanly release Peer ID on page refresh/close so 0.peerjs.com frees the room ID immediately
+    window.addEventListener('beforeunload', () => {
+      try {
+        this.peer?.destroy();
+      } catch {}
+    });
 
     this.initPeer();
     this.startHeartbeat();
@@ -88,9 +123,22 @@ class WebRTCSyncManager {
   }
 
   public setRoomCode(newRoomCode: string) {
-    this.roomCode = newRoomCode.toUpperCase().trim().replace(/[^A-Z0-9-]/g, '');
-    localStorage.setItem('tahadi5_host_room', this.roomCode);
-    localStorage.setItem('tahadi5_active_room', this.roomCode);
+    const cleaned = newRoomCode.toUpperCase().trim().replace(/[^A-Z0-9-]/g, '');
+    if (!cleaned || cleaned === this.roomCode) return;
+    this.roomCode = cleaned;
+    this.hostIdRetryCount = 0;
+    try {
+      localStorage.setItem('tahadi5_host_room', this.roomCode);
+      localStorage.setItem('tahadi5_active_room', this.roomCode);
+    } catch {}
+    this.cleanup();
+    this.initPeer();
+    this.startHeartbeat();
+  }
+
+  public reconnectNow() {
+    this.reconnectAttempts = 0;
+    this.hostIdRetryCount = 0;
     this.cleanup();
     this.initPeer();
     this.startHeartbeat();
@@ -119,12 +167,13 @@ class WebRTCSyncManager {
       this.updateStatus('connecting');
 
       if (this.isHost) {
-        // Host tries to register fixed room ID
+        // Host registers fixed room ID so existing QR codes on phones always stay valid
         const peerId = `tahadi5-${this.roomCode.toLowerCase()}`;
         this.peer = new Peer(peerId, PEER_ICE_CONFIG);
 
         this.peer.on('open', () => {
           this.reconnectAttempts = 0;
+          this.hostIdRetryCount = 0;
           this.updateStatus(this.connections.size > 0 ? 'connected' : 'connecting');
         });
 
@@ -134,25 +183,32 @@ class WebRTCSyncManager {
 
         this.peer.on('error', (err) => {
           if (err.type === 'unavailable-id') {
-            // The phone can only find the room encoded in its QR/link. Rotate
-            // the room code as well as the Peer ID so the visible QR stays valid.
+            // Do NOT change the roomCode! Changing roomCode invalidates the phone's QR code.
+            // Instead, wait briefly for the previous page unload session on PeerJS server to expire and retry the same roomCode.
             this.peer?.destroy();
             this.peer = null;
-            const suffix = Math.floor(1000 + Math.random() * 9000);
-            this.roomCode = `ELITE-${suffix}`;
-            try {
-              localStorage.setItem('tahadi5_host_room', this.roomCode);
-              localStorage.setItem('tahadi5_active_room', this.roomCode);
-            } catch {}
+            this.hostIdRetryCount += 1;
+            const retryDelay = Math.min(4000, 1000 * this.hostIdRetryCount);
             this.updateStatus('connecting');
-            window.setTimeout(() => this.initPeer(), 250);
+            window.setTimeout(() => this.initPeer(), retryDelay);
           } else {
             this.updateStatus('disconnected');
+            window.setTimeout(() => this.restartPeer(), 2500);
           }
         });
         this.peer.on('disconnected', () => {
           this.updateStatus('disconnected');
-          window.setTimeout(() => this.restartPeer(), 1000);
+          window.setTimeout(() => {
+            try {
+              if (this.peer && !this.peer.destroyed) {
+                this.peer.reconnect();
+              } else {
+                this.restartPeer();
+              }
+            } catch {
+              this.restartPeer();
+            }
+          }, 1000);
         });
       } else {
         // Client (Phone Remote)
@@ -246,12 +302,12 @@ class WebRTCSyncManager {
 
   private scheduleReconnect(recreatePeer = false) {
     if (this.reconnectTimer) return;
-    const delay = Math.min(8000, 1200 * Math.max(1, this.reconnectAttempts + 1));
+    const delay = Math.min(4000, 1000 * Math.max(1, (this.reconnectAttempts % 4) + 1));
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       this.reconnectAttempts += 1;
       if (!this.isHost && (!this.hostConnection || !this.hostConnection.open)) {
-        if (recreatePeer || !this.peer || this.peer.destroyed || this.peer.disconnected || this.reconnectAttempts % 4 === 0) {
+        if (recreatePeer || !this.peer || this.peer.destroyed || this.peer.disconnected || this.reconnectAttempts % 3 === 0) {
           this.restartPeer();
         } else {
           this.connectToHost();
@@ -277,14 +333,14 @@ class WebRTCSyncManager {
         try {
           this.hostConnection.send(JSON.stringify({ type: 'PING' }));
         } catch {}
-        if (Date.now() - this.lastPongAt > 15000) {
+        if (Date.now() - this.lastPongAt > 12000) {
           this.updateStatus('disconnected');
           this.scheduleReconnect(true);
         }
       } else if (!this.isHost) {
         this.scheduleReconnect(!this.peer || this.peer.destroyed || this.peer.disconnected);
       }
-    }, 4000);
+    }, 3000);
   }
 
   private handleIncomingData(data: unknown, senderPeerId?: string) {

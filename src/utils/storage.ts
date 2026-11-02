@@ -44,6 +44,50 @@ if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
 // Active subscribers registry
 const subscribers = new Set<(type: string, payload: unknown) => void>();
 
+// Unified connection status subscribers (combines WebSocket, HTTP /api/state, and WebRTC)
+type ConnStatusHandler = (status: 'connected' | 'connecting' | 'disconnected', clientCount: number) => void;
+const connStatusSubscribers = new Set<ConnStatusHandler>();
+let wsConnected = false;
+let httpConnected = false;
+let webrtcStatus: 'connected' | 'connecting' | 'disconnected' = 'connecting';
+let webrtcClients = 0;
+let serverClientsCount = 0;
+
+function getCombinedStatus(): { status: 'connected' | 'connecting' | 'disconnected'; clientCount: number } {
+  const isHost = webrtcSync.getIsHost();
+  const remoteClientsFromServer = Math.max(0, serverClientsCount - 1);
+  const totalClients = Math.max(webrtcClients, remoteClientsFromServer);
+
+  if (webrtcStatus === 'connected' || wsConnected || httpConnected) {
+    return {
+      status: 'connected',
+      clientCount: isHost ? totalClients : Math.max(1, totalClients),
+    };
+  }
+  if (webrtcStatus === 'connecting') {
+    return { status: 'connecting', clientCount: totalClients };
+  }
+  return { status: 'disconnected', clientCount: 0 };
+}
+
+function notifyConnectionStatus() {
+  const { status, clientCount } = getCombinedStatus();
+  connStatusSubscribers.forEach((handler) => {
+    try {
+      handler(status, clientCount);
+    } catch {}
+  });
+}
+
+export function subscribeToConnectionStatus(handler: ConnStatusHandler): () => void {
+  connStatusSubscribers.add(handler);
+  const { status, clientCount } = getCombinedStatus();
+  handler(status, clientCount);
+  return () => {
+    connStatusSubscribers.delete(handler);
+  };
+}
+
 // Track processed command IDs so multi-transport delivery (WebRTC + WS + BroadcastChannel + HTTP poll) never double-fires
 const processedCommandIds = new Set<string>();
 
@@ -51,11 +95,56 @@ function markCommandProcessed(cmdId?: string): boolean {
   if (!cmdId) return true;
   if (processedCommandIds.has(cmdId)) return false;
   processedCommandIds.add(cmdId);
-  if (processedCommandIds.size > 300) {
+  if (processedCommandIds.size > 400) {
     const first = processedCommandIds.values().next().value;
     if (first) processedCommandIds.delete(first);
   }
   return true;
+}
+
+function buildLocalFullState(): Record<string, unknown> {
+  const fullState: Record<string, unknown> = {};
+  try {
+    const teams = localStorage.getItem(STORAGE_KEYS.TEAMS);
+    if (teams) fullState['TEAMS_UPDATED'] = JSON.parse(teams);
+    const settings = localStorage.getItem(STORAGE_KEYS.LEAGUE_SETTINGS);
+    if (settings) fullState['LEAGUE_SETTINGS_UPDATED'] = JSON.parse(settings);
+    const match = localStorage.getItem(STORAGE_KEYS.CURRENT_MATCH);
+    if (match) fullState['MATCH_UPDATED'] = JSON.parse(match);
+    const history = localStorage.getItem(STORAGE_KEYS.MATCHES_HISTORY);
+    if (history) fullState['HISTORY_UPDATED'] = JSON.parse(history);
+    const cards = localStorage.getItem(STORAGE_KEYS.CARD_STATES);
+    if (cards) fullState['CARDS_UPDATED'] = JSON.parse(cards);
+    const games = localStorage.getItem(STORAGE_KEYS.GAMES);
+    if (games) fullState['GAMES_UPDATED'] = JSON.parse(games);
+    const categories = localStorage.getItem(STORAGE_KEYS.SELECTED_CATEGORIES);
+    if (categories) fullState['CATEGORIES_UPDATED'] = JSON.parse(categories);
+    const arena = localStorage.getItem(STORAGE_KEYS.ARENA_COLUMN_GAMES);
+    if (arena) fullState['ARENA_GAMES_UPDATED'] = JSON.parse(arena);
+    if (webrtcSync.getIsHost()) {
+      fullState['HOST_ROOM_CODE'] = webrtcSync.getRoomCode();
+    }
+  } catch {}
+  return fullState;
+}
+
+export function pushHostStateToServer() {
+  if (typeof window === 'undefined' || !webrtcSync.getIsHost()) return;
+  const fullState = buildLocalFullState();
+  try {
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'BULK_STATE_SYNC', payload: fullState }),
+    })
+      .then((r) => {
+        if (r.ok) {
+          httpConnected = true;
+          notifyConnectionStatus();
+        }
+      })
+      .catch(() => {});
+  } catch {}
 }
 
 // Real-Time WebSocket client for remote mobile controller
@@ -63,30 +152,66 @@ let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 function applyCachedStatePayload(cachedState: Record<string, unknown>) {
+  if (typeof cachedState.__CLIENTS_COUNT__ === 'number') {
+    serverClientsCount = cachedState.__CLIENTS_COUNT__;
+  }
+
   Object.entries(cachedState).forEach(([type, payload]) => {
+    if (type === '__CLIENTS_COUNT__') return;
+    if (type === '__RECENT_COMMANDS__' && Array.isArray(payload)) {
+      payload.forEach((cmd: any) => {
+        if (cmd && cmd.type && (!cmd.timestamp || Date.now() - cmd.timestamp < 6000)) {
+          syncIncomingUpdate(cmd.type, cmd.payload, cmd.cmdId);
+        }
+      });
+      return;
+    }
     if (type === '__LAST_COMMAND__' && payload && typeof payload === 'object') {
       const cmd = payload as { type?: string; payload?: unknown; cmdId?: string; timestamp?: number };
-      if (cmd.type && (!cmd.timestamp || Date.now() - cmd.timestamp < 5000)) {
+      if (cmd.type && (!cmd.timestamp || Date.now() - cmd.timestamp < 6000)) {
         syncIncomingUpdate(cmd.type, cmd.payload, cmd.cmdId);
       }
-    } else {
-      syncIncomingUpdate(type, payload);
+      return;
     }
+    syncIncomingUpdate(type, payload);
   });
 }
 
 function connectWebSocket() {
   if (typeof window === 'undefined' || typeof WebSocket === 'undefined') return;
   try {
+    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     socket = new WebSocket(wsUrl);
 
+    socket.onopen = () => {
+      wsConnected = true;
+      notifyConnectionStatus();
+      if (webrtcSync.getIsHost()) {
+        pushHostStateToServer();
+      } else {
+        broadcastMessage('REQUEST_FULL_SYNC', { timestamp: Date.now() });
+      }
+    };
+
     socket.onmessage = (event) => {
       try {
+        wsConnected = true;
         const data = JSON.parse(event.data);
+        if (typeof data.clientsCount === 'number') {
+          serverClientsCount = data.clientsCount;
+        }
+        if (data.type === 'CLIENTS_COUNT_UPDATED' && typeof data.payload === 'number') {
+          serverClientsCount = data.payload;
+          notifyConnectionStatus();
+          return;
+        }
         if (data.type === 'FULL_STATE_SYNC' && data.payload) {
           applyCachedStatePayload(data.payload);
+          notifyConnectionStatus();
         } else if (data.type) {
           syncIncomingUpdate(data.type, data.payload, data.cmdId);
         }
@@ -97,11 +222,13 @@ function connectWebSocket() {
 
     socket.onclose = () => {
       socket = null;
+      wsConnected = false;
+      notifyConnectionStatus();
       if (!reconnectTimer) {
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
           connectWebSocket();
-        }, 3000);
+        }, 2000);
       }
     };
 
@@ -113,33 +240,56 @@ function connectWebSocket() {
   }
 }
 
-// Initialize socket immediately on client
-if (typeof window !== 'undefined') {
-  connectWebSocket();
-
-  // Also fetch initial cached state from server on startup
+function fetchServerStateOnce() {
+  if (typeof window === 'undefined') return;
   fetch('/api/state')
-    .then((r) => r.json())
+    .then((r) => {
+      if (!r.ok) throw new Error('status not ok');
+      httpConnected = true;
+      return r.json();
+    })
     .then((cachedState) => {
       if (cachedState && typeof cachedState === 'object') {
         applyCachedStatePayload(cachedState);
       }
+      notifyConnectionStatus();
     })
-    .catch(() => {});
+    .catch(() => {
+      httpConnected = false;
+      notifyConnectionStatus();
+    });
+}
 
-  // Fallback periodic poll if WebSocket is disconnected or blocked by CDN/proxy
-  setInterval(() => {
-    if (!socket || socket.readyState !== 1) { // 1 = WebSocket.OPEN
-      fetch('/api/state')
-        .then((r) => r.json())
-        .then((cachedState) => {
-          if (cachedState && typeof cachedState === 'object') {
-            applyCachedStatePayload(cachedState);
-          }
-        })
-        .catch(() => {});
+export function forceReconnectAll() {
+  webrtcSync.reconnectNow();
+  try {
+    if (socket) {
+      socket.close();
+      socket = null;
     }
-  }, 1500);
+  } catch {}
+  connectWebSocket();
+  fetchServerStateOnce();
+  if (webrtcSync.getIsHost()) {
+    pushHostStateToServer();
+  } else {
+    broadcastMessage('REQUEST_FULL_SYNC', { timestamp: Date.now() });
+  }
+}
+
+// Initialize socket & HTTP sync immediately on client
+if (typeof window !== 'undefined') {
+  connectWebSocket();
+  fetchServerStateOnce();
+
+  if (webrtcSync.getIsHost()) {
+    setTimeout(() => pushHostStateToServer(), 300);
+  }
+
+  // Continuous fast 1000ms poll ensures 100% reliability even when mobile proxies buffer WebSockets or block WebRTC UDP
+  setInterval(() => {
+    fetchServerStateOnce();
+  }, 1000);
 }
 
 // Throttled local storage writer with in-memory batching to eliminate synchronous frame drops
@@ -167,6 +317,28 @@ function syncIncomingUpdate(type: string, payload: unknown, cmdId?: string) {
     return;
   }
 
+  if (type === 'HOST_ROOM_CODE' && typeof payload === 'string' && payload.trim()) {
+    // If phone remote sees the active host room code from server and isn't connected on WebRTC yet, sync room code automatically
+    if (!webrtcSync.getIsHost() && webrtcSync.getStatus() !== 'connected' && webrtcSync.getRoomCode() !== payload) {
+      webrtcSync.setRoomCode(payload);
+    }
+    return;
+  }
+
+  if (type === 'REQUEST_FULL_SYNC') {
+    if (webrtcSync.getIsHost()) {
+      pushHostStateToServer();
+    }
+    return;
+  }
+
+  if (type === 'BULK_STATE_SYNC' && payload && typeof payload === 'object') {
+    Object.entries(payload as Record<string, unknown>).forEach(([k, v]) => {
+      syncIncomingUpdate(k, v);
+    });
+    return;
+  }
+
   // Sync to local storage with throttled batching
   try {
     if (type === 'TEAMS_UPDATED') batchSetLocalStorage(STORAGE_KEYS.TEAMS, JSON.stringify(payload));
@@ -189,6 +361,12 @@ function syncIncomingUpdate(type: string, payload: unknown, cmdId?: string) {
 
 // Initialize WebRTC listener & provider for serverless peer sync (GitHub Pages & custom domains)
 if (typeof window !== 'undefined') {
+  webrtcSync.onStatusChange((status, count) => {
+    webrtcStatus = status;
+    webrtcClients = count;
+    notifyConnectionStatus();
+  });
+
   webrtcSync.onMessage((type, payload) => {
     if (payload && typeof payload === 'object' && '__cmdId' in (payload as Record<string, unknown>)) {
       const wrapped = payload as { __cmdId: string; __data: unknown };
@@ -198,28 +376,7 @@ if (typeof window !== 'undefined') {
     }
   });
 
-  webrtcSync.setFullStateProvider(() => {
-    const fullState: Record<string, unknown> = {};
-    try {
-      const teams = localStorage.getItem(STORAGE_KEYS.TEAMS);
-      if (teams) fullState['TEAMS_UPDATED'] = JSON.parse(teams);
-      const settings = localStorage.getItem(STORAGE_KEYS.LEAGUE_SETTINGS);
-      if (settings) fullState['LEAGUE_SETTINGS_UPDATED'] = JSON.parse(settings);
-      const match = localStorage.getItem(STORAGE_KEYS.CURRENT_MATCH);
-      if (match) fullState['MATCH_UPDATED'] = JSON.parse(match);
-      const history = localStorage.getItem(STORAGE_KEYS.MATCHES_HISTORY);
-      if (history) fullState['HISTORY_UPDATED'] = JSON.parse(history);
-      const cards = localStorage.getItem(STORAGE_KEYS.CARD_STATES);
-      if (cards) fullState['CARDS_UPDATED'] = JSON.parse(cards);
-      const games = localStorage.getItem(STORAGE_KEYS.GAMES);
-      if (games) fullState['GAMES_UPDATED'] = JSON.parse(games);
-      const categories = localStorage.getItem(STORAGE_KEYS.SELECTED_CATEGORIES);
-      if (categories) fullState['CATEGORIES_UPDATED'] = JSON.parse(categories);
-      const arena = localStorage.getItem(STORAGE_KEYS.ARENA_COLUMN_GAMES);
-      if (arena) fullState['ARENA_GAMES_UPDATED'] = JSON.parse(arena);
-    } catch {}
-    return fullState;
-  });
+  webrtcSync.setFullStateProvider(() => buildLocalFullState());
 }
 
 // Broadcast to local subscribers, local tabs, server WebSocket, server REST, and serverless WebRTC (PeerJS)
@@ -251,16 +408,23 @@ export function broadcastMessage(type: string, payload: unknown) {
     try {
       socket.send(JSON.stringify({ type, payload, cmdId }));
     } catch {}
-  } else {
-    // 4. Fallback POST to server if socket is reconnecting
-    try {
-      fetch('/api/state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, payload, cmdId }),
-      }).catch(() => {});
-    } catch {}
   }
+
+  // 4. Always mirror to /api/state so HTTP polling clients & server state cache stay 100% synchronized
+  try {
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, payload, cmdId }),
+    })
+      .then((r) => {
+        if (r.ok && !httpConnected) {
+          httpConnected = true;
+          notifyConnectionStatus();
+        }
+      })
+      .catch(() => {});
+  } catch {}
 }
 
 export function subscribeToBroadcast(handler: (type: string, payload: unknown) => void): () => void {
