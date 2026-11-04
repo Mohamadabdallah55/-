@@ -31,10 +31,19 @@
           window.history.replaceState(null, null, decodeURIComponent(redirect));
         }
 
-        // Register Service Worker for PWA & offline arena functionality
+        // Clear any stale legacy cache (clash-of-elites-v2) and update Service Worker immediately
+        if ('caches' in window) {
+          caches.keys().then(function(keys) {
+            keys.forEach(function(k) {
+              if (k !== 'clash-of-elites-v100') caches.delete(k);
+            });
+          }).catch(function() {});
+        }
         if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
           window.addEventListener('load', function() {
-            navigator.serviceWorker.register('./sw.js').catch(function() {});
+            navigator.serviceWorker.register('./sw.js').then(function(reg) {
+              reg.update();
+            }).catch(function() {});
           });
         }
       })();
