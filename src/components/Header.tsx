@@ -55,10 +55,12 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [clientCount, setClientCount] = useState(0);
   const [connectionReady, setConnectionReady] = useState(false);
+  const [roomCode, setRoomCode] = useState(() => webrtcSync.getRoomCode());
 
   useEffect(() => webrtcSync.onStatusChange((status, count) => {
     setClientCount(count);
     setConnectionReady(status !== 'disconnected');
+    setRoomCode(webrtcSync.getRoomCode());
   }), []);
 
   const openStandaloneTimer = () => {
@@ -98,10 +100,19 @@ export const Header: React.FC<HeaderProps> = ({
         <nav className="sidebar-nav">{renderNav()}</nav>
 
         <div className="sidebar-spacer" />
-        <div className="sidebar-connection">
+        <div
+          className="sidebar-connection"
+          onClick={onOpenMobileConnectModal}
+          role="button"
+          tabIndex={0}
+          title="اضغط لعرض باركود ورمز ربط الهاتف"
+        >
           <span className={`connection-icon ${clientCount ? 'is-live' : ''}`}><Wifi /></span>
-          <span><strong>{clientCount ? `الريموت متصل (${clientCount})` : 'التحكم عن بُعد'}</strong><small>{connectionReady ? 'جاهز للاتصال' : 'بانتظار الاتصال'}</small></span>
-          <i className={connectionReady ? 'status-led is-ready' : 'status-led'} />
+          <span>
+            <strong>{clientCount ? `الريموت متصل (${clientCount}) 🟢` : `رمز ربط الهاتف: ${roomCode}`}</strong>
+            <small>{clientCount ? `متصل بالغرفة #${roomCode}` : `اضغط للربط • كود #${roomCode}`}</small>
+          </span>
+          <i className={connectionReady || clientCount > 0 ? 'status-led is-ready' : 'status-led'} />
         </div>
 
         <div className="sidebar-actions">

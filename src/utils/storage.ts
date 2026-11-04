@@ -44,28 +44,62 @@ if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
 // Active subscribers registry
 const subscribers = new Set<(type: string, payload: unknown) => void>();
 
-// Unified connection status subscribers (combines WebSocket, HTTP /api/state, and WebRTC)
+// Unified connection status subscribers (combines PeerJS WebRTC P2P + verified same-room /api/state backup)
 type ConnStatusHandler = (status: 'connected' | 'connecting' | 'disconnected', clientCount: number) => void;
 const connStatusSubscribers = new Set<ConnStatusHandler>();
 let wsConnected = false;
 let httpConnected = false;
+let httpHostActiveForRoom = false;
 let webrtcStatus: 'connected' | 'connecting' | 'disconnected' = 'connecting';
 let webrtcClients = 0;
 let serverClientsCount = 0;
 
+function getApiBaseUrl(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const apiParam = params.get('api');
+    if (apiParam && (apiParam.startsWith('http://') || apiParam.startsWith('https://'))) {
+      return apiParam.replace(/\/+$/, '');
+    }
+  } catch {}
+  return '';
+}
+
+function getApiStateEndpoint(withRoomQuery = false): string {
+  const base = getApiBaseUrl();
+  const path = `${base}/api/state`;
+  if (withRoomQuery) {
+    return `${path}?room=${encodeURIComponent(webrtcSync.getRoomCode())}`;
+  }
+  return path;
+}
+
 function getCombinedStatus(): { status: 'connected' | 'connecting' | 'disconnected'; clientCount: number } {
   const isHost = webrtcSync.getIsHost();
-  const remoteClientsFromServer = Math.max(0, serverClientsCount - 1);
+  const remoteClientsFromServer = httpHostActiveForRoom ? Math.max(0, serverClientsCount - 1) : 0;
   const totalClients = Math.max(webrtcClients, remoteClientsFromServer);
 
-  if (webrtcStatus === 'connected' || wsConnected || httpConnected) {
+  if (isHost) {
+    // On Host (Computer): connected if at least 1 phone is connected on PeerJS OR Host Peer is open on PeerJS cloud
+    if (webrtcClients > 0 || webrtcSync.isHostCloudReady() || wsConnected || httpConnected) {
+      return {
+        status: 'connected',
+        clientCount: totalClients,
+      };
+    }
+    return { status: 'connecting', clientCount: 0 };
+  }
+
+  // On Remote (Phone): ONLY report 'connected' if PeerJS DataChannel is open to Host OR /api/state verified active Host for the same 4-digit room
+  if (webrtcStatus === 'connected' || httpHostActiveForRoom) {
     return {
       status: 'connected',
-      clientCount: isHost ? totalClients : Math.max(1, totalClients),
+      clientCount: Math.max(1, totalClients),
     };
   }
   if (webrtcStatus === 'connecting') {
-    return { status: 'connecting', clientCount: totalClients };
+    return { status: 'connecting', clientCount: 0 };
   }
   return { status: 'disconnected', clientCount: 0 };
 }
@@ -132,10 +166,14 @@ export function pushHostStateToServer() {
   if (typeof window === 'undefined' || !webrtcSync.getIsHost()) return;
   const fullState = buildLocalFullState();
   try {
-    fetch('/api/state', {
+    fetch(getApiStateEndpoint(false), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'BULK_STATE_SYNC', payload: fullState }),
+      body: JSON.stringify({
+        type: 'BULK_STATE_SYNC',
+        payload: fullState,
+        roomCode: webrtcSync.getRoomCode(),
+      }),
     })
       .then((r) => {
         if (r.ok) {
@@ -147,20 +185,42 @@ export function pushHostStateToServer() {
   } catch {}
 }
 
-// Real-Time WebSocket client for remote mobile controller
+// Real-Time WebSocket client for remote mobile controller (when sharing same server origin)
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-function applyCachedStatePayload(cachedState: Record<string, unknown>) {
+function applyCachedStatePayload(cachedState: Record<string, unknown>, isFromDirectPeer = false) {
   if (typeof cachedState.__CLIENTS_COUNT__ === 'number') {
     serverClientsCount = cachedState.__CLIENTS_COUNT__;
   }
 
+  if (!isFromDirectPeer) {
+    const activeForRoom = Boolean(cachedState.__HOST_ACTIVE_FOR_ROOM__);
+    const hostRoomOnServer = typeof cachedState.__HOST_ROOM_CODE__ === 'string' ? cachedState.__HOST_ROOM_CODE__ : '';
+    httpHostActiveForRoom = activeForRoom && hostRoomOnServer === webrtcSync.getRoomCode();
+
+    // Only apply server cached state to a Phone if that server actually belongs to the active Host room
+    if (!webrtcSync.getIsHost() && !httpHostActiveForRoom) {
+      return;
+    }
+  }
+
   Object.entries(cachedState).forEach(([type, payload]) => {
-    if (type === '__CLIENTS_COUNT__') return;
+    if (
+      type === '__CLIENTS_COUNT__' ||
+      type === '__HOST_ACTIVE_FOR_ROOM__' ||
+      type === '__HOST_ROOM_CODE__'
+    ) {
+      return;
+    }
     if (type === '__RECENT_COMMANDS__' && Array.isArray(payload)) {
       payload.forEach((cmd: any) => {
-        if (cmd && cmd.type && (!cmd.timestamp || Date.now() - cmd.timestamp < 6000)) {
+        if (
+          cmd &&
+          cmd.type &&
+          (!cmd.roomCode || cmd.roomCode === webrtcSync.getRoomCode()) &&
+          (!cmd.timestamp || Date.now() - cmd.timestamp < 8000)
+        ) {
           syncIncomingUpdate(cmd.type, cmd.payload, cmd.cmdId);
         }
       });
@@ -168,7 +228,7 @@ function applyCachedStatePayload(cachedState: Record<string, unknown>) {
     }
     if (type === '__LAST_COMMAND__' && payload && typeof payload === 'object') {
       const cmd = payload as { type?: string; payload?: unknown; cmdId?: string; timestamp?: number };
-      if (cmd.type && (!cmd.timestamp || Date.now() - cmd.timestamp < 6000)) {
+      if (cmd.type && (!cmd.timestamp || Date.now() - cmd.timestamp < 8000)) {
         syncIncomingUpdate(cmd.type, cmd.payload, cmd.cmdId);
       }
       return;
@@ -210,9 +270,9 @@ function connectWebSocket() {
           return;
         }
         if (data.type === 'FULL_STATE_SYNC' && data.payload) {
-          applyCachedStatePayload(data.payload);
+          applyCachedStatePayload(data.payload, false);
           notifyConnectionStatus();
-        } else if (data.type) {
+        } else if (data.type && (!data.roomCode || data.roomCode === webrtcSync.getRoomCode())) {
           syncIncomingUpdate(data.type, data.payload, data.cmdId);
         }
       } catch (err) {
@@ -228,7 +288,7 @@ function connectWebSocket() {
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
           connectWebSocket();
-        }, 2000);
+        }, 2500);
       }
     };
 
@@ -242,7 +302,7 @@ function connectWebSocket() {
 
 function fetchServerStateOnce() {
   if (typeof window === 'undefined') return;
-  fetch('/api/state')
+  fetch(getApiStateEndpoint(true))
     .then((r) => {
       if (!r.ok) throw new Error('status not ok');
       httpConnected = true;
@@ -250,12 +310,13 @@ function fetchServerStateOnce() {
     })
     .then((cachedState) => {
       if (cachedState && typeof cachedState === 'object') {
-        applyCachedStatePayload(cachedState);
+        applyCachedStatePayload(cachedState, false);
       }
       notifyConnectionStatus();
     })
     .catch(() => {
       httpConnected = false;
+      httpHostActiveForRoom = false;
       notifyConnectionStatus();
     });
 }
@@ -286,10 +347,13 @@ if (typeof window !== 'undefined') {
     setTimeout(() => pushHostStateToServer(), 300);
   }
 
-  // Continuous fast 1000ms poll ensures 100% reliability even when mobile proxies buffer WebSockets or block WebRTC UDP
+  // Continuous 1200ms poll for /api/state backup channel + Host heartbeat
   setInterval(() => {
+    if (webrtcSync.getIsHost()) {
+      pushHostStateToServer();
+    }
     fetchServerStateOnce();
-  }, 1000);
+  }, 1200);
 }
 
 // Throttled local storage writer with in-memory batching to eliminate synchronous frame drops
@@ -317,24 +381,23 @@ function syncIncomingUpdate(type: string, payload: unknown, cmdId?: string) {
     return;
   }
 
-  if (type === 'HOST_ROOM_CODE' && typeof payload === 'string' && payload.trim()) {
-    // If phone remote sees the active host room code from server and isn't connected on WebRTC yet, sync room code automatically
-    if (!webrtcSync.getIsHost() && webrtcSync.getStatus() !== 'connected' && webrtcSync.getRoomCode() !== payload) {
-      webrtcSync.setRoomCode(payload);
-    }
+  if (type === 'HOST_ROOM_CODE') {
     return;
   }
 
   if (type === 'REQUEST_FULL_SYNC') {
     if (webrtcSync.getIsHost()) {
       pushHostStateToServer();
+      webrtcSync.broadcast('FULL_STATE_SYNC', buildLocalFullState());
     }
     return;
   }
 
-  if (type === 'BULK_STATE_SYNC' && payload && typeof payload === 'object') {
+  if ((type === 'BULK_STATE_SYNC' || type === 'FULL_STATE_SYNC' || type === 'state') && payload && typeof payload === 'object') {
     Object.entries(payload as Record<string, unknown>).forEach(([k, v]) => {
-      syncIncomingUpdate(k, v);
+      if (k !== 'FULL_STATE_SYNC' && k !== 'BULK_STATE_SYNC' && k !== 'state') {
+        syncIncomingUpdate(k, v);
+      }
     });
     return;
   }
@@ -359,7 +422,7 @@ function syncIncomingUpdate(type: string, payload: unknown, cmdId?: string) {
   });
 }
 
-// Initialize WebRTC listener & provider for serverless peer sync (GitHub Pages & custom domains)
+// Initialize WebRTC listener & provider for serverless peer sync (PeerJS DataChannel)
 if (typeof window !== 'undefined') {
   webrtcSync.onStatusChange((status, count) => {
     webrtcStatus = status;
@@ -367,19 +430,23 @@ if (typeof window !== 'undefined') {
     notifyConnectionStatus();
   });
 
-  webrtcSync.onMessage((type, payload) => {
+  webrtcSync.onMessage((type, payload, cmdId) => {
+    if (type === 'FULL_STATE_SYNC' && payload && typeof payload === 'object') {
+      applyCachedStatePayload(payload as Record<string, unknown>, true);
+      return;
+    }
     if (payload && typeof payload === 'object' && '__cmdId' in (payload as Record<string, unknown>)) {
       const wrapped = payload as { __cmdId: string; __data: unknown };
       syncIncomingUpdate(type, wrapped.__data, wrapped.__cmdId);
     } else {
-      syncIncomingUpdate(type, payload);
+      syncIncomingUpdate(type, payload, cmdId);
     }
   });
 
   webrtcSync.setFullStateProvider(() => buildLocalFullState());
 }
 
-// Broadcast to local subscribers, local tabs, server WebSocket, server REST, and serverless WebRTC (PeerJS)
+// Broadcast to local subscribers, PeerJS DataChannel, BroadcastChannel, WebSocket, and /api/state
 export function broadcastMessage(type: string, payload: unknown) {
   const cmdId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   markCommandProcessed(cmdId);
@@ -391,9 +458,9 @@ export function broadcastMessage(type: string, payload: unknown) {
     } catch {}
   });
 
-  // 1. WebRTC DataChannel (direct peer-to-peer between phone & laptop, 100% serverless)
+  // 1. PeerJS WebRTC DataChannel (direct P2P between phone & computer across any internet network)
   try {
-    webrtcSync.broadcast(type, { __cmdId: cmdId, __data: payload });
+    webrtcSync.broadcast(type, payload, cmdId);
   } catch {}
 
   // 2. BroadcastChannel (same browser tabs)
@@ -403,19 +470,25 @@ export function broadcastMessage(type: string, payload: unknown) {
     } catch {}
   }
 
-  // 3. WebSocket (remote mobile phone / other devices if Node.js server available)
+  // 3. WebSocket (if sharing same server instance)
   if (socket && socket.readyState === WebSocket.OPEN) {
     try {
-      socket.send(JSON.stringify({ type, payload, cmdId }));
+      socket.send(JSON.stringify({ type, payload, cmdId, roomCode: webrtcSync.getRoomCode() }));
     } catch {}
   }
 
-  // 4. Always mirror to /api/state so HTTP polling clients & server state cache stay 100% synchronized
+  // 4. Mirror to /api/state with CORS support
   try {
-    fetch('/api/state', {
+    fetch(getApiStateEndpoint(false), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, payload, cmdId }),
+      body: JSON.stringify({
+        type: webrtcSync.getIsHost() ? type : 'remote_action',
+        action: type,
+        payload,
+        cmdId,
+        roomCode: webrtcSync.getRoomCode(),
+      }),
     })
       .then((r) => {
         if (r.ok && !httpConnected) {

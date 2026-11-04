@@ -8,13 +8,13 @@ import {
   ExternalLink,
   QrCode,
   Globe,
-  Settings,
   RefreshCw,
   Sparkles,
   Wifi,
   ShieldCheck,
+  Hash,
 } from 'lucide-react';
-import { webrtcSync } from '../utils/webrtcSync';
+import { webrtcSync, normalizeFourDigitCode } from '../utils/webrtcSync';
 import {
   subscribeToConnectionStatus,
   pushHostStateToServer,
@@ -34,14 +34,15 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
 }) => {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
-  // Never keep an old host override across deployments: the published host is the default.
+  const [codeCopied, setCodeCopied] = useState(false);
   const [customDomain, setCustomDomain] = useState<string>('');
   const [tempDomainInput, setTempDomainInput] = useState<string>('');
   const [connStatus, setConnStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const [clientCount, setClientCount] = useState<number>(0);
   const [roomCode, setRoomCode] = useState<string>(() => webrtcSync.getRoomCode());
+  const [isEditingCustomCode, setIsEditingCustomCode] = useState<boolean>(false);
+  const [customCodeInput, setCustomCodeInput] = useState<string>('');
 
-  // Listen to unified live connection status (WebSocket + HTTP Server + WebRTC)
   useEffect(() => {
     return subscribeToConnectionStatus((status, count) => {
       setConnStatus(status);
@@ -50,8 +51,6 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
     });
   }, []);
 
-  // Derive the deployed base path at runtime.
-  // Automatically converts private `ais-dev-` preview origin to public `ais-pre-` shared origin so phones can open without login.
   const getCurrentDeploymentBase = () => {
     if (typeof window === 'undefined') return '';
     const origin = window.location.origin.replace(/^https:\/\/ais-dev-/, 'https://ais-pre-');
@@ -63,12 +62,12 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
   };
 
   const effectiveBase = customDomain.trim().replace(/\/+$/, '') || getCurrentDeploymentBase();
-
-  // This resolves to the active Vercel/custom-domain/shared host or the GitHub Pages project path.
-  const remoteUrl = `${effectiveBase}/?mode=remote&room=${roomCode}#remote`;
+  const apiOrigin = getCurrentDeploymentBase();
+  const remoteUrl = `${effectiveBase}/?mode=remote&room=${roomCode}&api=${encodeURIComponent(apiOrigin)}#remote`;
 
   useEffect(() => {
     if (isOpen) {
+      webrtcSync.setRole('host');
       setRoomCode(webrtcSync.getRoomCode());
       setTempDomainInput(customDomain || getCurrentDeploymentBase());
       pushHostStateToServer();
@@ -78,7 +77,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
   useEffect(() => {
     if (typeof window !== 'undefined' && remoteUrl) {
       QRCode.toDataURL(remoteUrl, {
-        width: 320,
+        width: 300,
         margin: 2,
         color: {
           dark: '#070D1F',
@@ -100,13 +99,20 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
     }
   };
 
+  const handleCopyCode = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(roomCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+  };
+
   const handleSaveCustomDomain = () => {
     let clean = tempDomainInput.trim();
     if (clean && !clean.startsWith('http://') && !clean.startsWith('https://')) {
       clean = `https://${clean}`;
     }
     clean = clean.replace(/\/+$/, '');
-
     setCustomDomain(clean);
   };
 
@@ -120,11 +126,22 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
     }
   };
 
+  const handleApplyCustomRoomCode = () => {
+    const cleaned = normalizeFourDigitCode(customCodeInput);
+    if (cleaned.length === 4) {
+      webrtcSync.setRoomCode(cleaned);
+      setRoomCode(cleaned);
+      setIsEditingCustomCode(false);
+      pushHostStateToServer();
+    }
+  };
+
+  const digits = roomCode.padStart(4, '0').slice(0, 4).split('');
   const isUsingCustomDomain = Boolean(customDomain && customDomain.trim() !== '');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 animate-fade-in select-none">
-      <div className="bg-[#0A0F24] border border-slate-700/80 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative text-right max-h-[92vh] overflow-y-auto">
+      <div className="bg-[#0A0F24] border border-slate-700/80 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative text-right max-h-[94vh] overflow-y-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -139,29 +156,153 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             <Smartphone className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg sm:text-xl font-bold font-changa text-white flex items-center gap-2">
-              <span>التحكم بالدوري من الهاتف</span>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                clientCount > 0 || connStatus === 'connected'
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-600'
-                  : 'bg-indigo-950 text-indigo-300 border border-indigo-700'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${clientCount > 0 || connStatus === 'connected' ? 'bg-emerald-400 animate-ping' : 'bg-indigo-400'}`} />
-                {clientCount > 0 ? `ONLINE (${clientCount}) 🟢` : connStatus === 'connected' ? 'SERVER READY 🟢' : 'CONNECTING...'}
+            <h2 className="text-lg sm:text-xl font-bold font-changa text-white flex items-center gap-2 flex-wrap">
+              <span>ربط جهاز التحكم من الهاتف</span>
+              <span
+                className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 ${
+                  clientCount > 0
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-500'
+                    : connStatus === 'connected'
+                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/60'
+                    : 'bg-indigo-950 text-indigo-300 border border-indigo-700'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    clientCount > 0
+                      ? 'bg-emerald-400 animate-ping'
+                      : connStatus === 'connected'
+                      ? 'bg-cyan-400 animate-pulse'
+                      : 'bg-amber-400'
+                  }`}
+                />
+                {clientCount > 0
+                  ? `متصل بالهاتف (${clientCount}) 🟢`
+                  : 'جاهز للربط المباشر 🟢'}
               </span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              امسح الكود بكاميرا هاتفك للتحكم المباشر في النتيجة والألعاب عبر شبكات Wi-Fi أو 4G/5G
+              امسح الباركود أو أدخل رمز الغرفة المكون من 4 أرقام في شاشة الهاتف للربط الفوري عبر PeerJS
             </p>
           </div>
         </div>
 
-        {/* Current deployment URL is automatic; manual override is only for this session. */}
-        <div className="mb-3 p-3 rounded-2xl bg-gradient-to-b from-[#0D1533] to-[#070B1A] border border-cyan-500/40 space-y-2 text-right">
+        {/* PROMINENT 4-DIGIT ROOM CODE CARD */}
+        <div className="mb-3 p-4 rounded-2xl bg-gradient-to-br from-indigo-950/90 via-[#0E1738] to-cyan-950/80 border-2 border-cyan-400/60 shadow-xl shadow-cyan-950/40">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-xs sm:text-sm font-black font-changa text-cyan-300 flex items-center gap-1.5">
+              <Hash className="w-4 h-4 text-cyan-400" />
+              <span>رمز الغرفة للربط المباشر (4 أرقام):</span>
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setIsEditingCustomCode((v) => !v);
+                  setCustomCodeInput(roomCode);
+                }}
+                className="text-[10px] bg-slate-900/90 hover:bg-slate-800 text-cyan-200 border border-cyan-500/40 px-2.5 py-1 rounded-lg font-bold"
+              >
+                {isEditingCustomCode ? 'إلغاء' : 'تعديل الرمز'}
+              </button>
+              <button
+                onClick={() => {
+                  const next = webrtcSync.generateNewRoomCode();
+                  setRoomCode(next);
+                  pushHostStateToServer();
+                }}
+                className="text-[10px] bg-indigo-900/90 hover:bg-indigo-800 text-indigo-200 border border-indigo-400/40 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1"
+                title="توليد رمز جديد من 4 أرقام"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>رمز جديد</span>
+              </button>
+            </div>
+          </div>
+
+          {isEditingCustomCode ? (
+            <div className="flex items-center gap-2 my-2">
+              <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={4}
+                dir="ltr"
+                value={customCodeInput}
+                onChange={(e) => setCustomCodeInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="1234"
+                className="flex-1 bg-slate-950 border-2 border-cyan-400 rounded-xl py-2.5 px-4 text-2xl font-black font-mono text-center text-white tracking-[0.5em] focus:outline-none"
+              />
+              <button
+                onClick={handleApplyCustomRoomCode}
+                disabled={customCodeInput.replace(/\D/g, '').length !== 4}
+                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black font-changa text-sm shadow-lg"
+              >
+                اعتماد الرمز
+              </button>
+            </div>
+          ) : (
+            <div
+              onClick={handleCopyCode}
+              title="اضغط لنسخ الرمز"
+              className="flex items-center justify-center gap-2.5 sm:gap-3 my-2 cursor-pointer group"
+              dir="ltr"
+            >
+              {digits.map((digit, idx) => (
+                <div
+                  key={idx}
+                  className="w-14 h-16 sm:w-16 sm:h-18 rounded-2xl bg-[#050918] border-2 border-cyan-400/80 group-hover:border-emerald-400 flex items-center justify-center text-3xl sm:text-4xl font-black font-mono text-white shadow-[0_0_20px_rgba(34,211,238,0.25)] transition-all"
+                >
+                  {digit}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-[11px] text-cyan-200/90 mt-2 pt-2 border-t border-cyan-500/20">
+            <span className="font-mono text-[10px] text-slate-300" dir="ltr">
+              Peer ID: elite-clash-room-{roomCode}
+            </span>
+            <span className="font-bold text-emerald-300">
+              {codeCopied ? '✓ تم نسخ الرمز!' : 'اكتب هذه الـ 4 أرقام في شاشة الهاتف للاتصال فوراً'}
+            </span>
+          </div>
+        </div>
+
+        {/* QR Code Container */}
+        <div className="flex flex-col items-center justify-center p-3.5 bg-white rounded-3xl shadow-2xl border-4 border-slate-300/40 my-3">
+          {qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt="Scan QR for Mobile Remote"
+              className="w-44 h-44 sm:w-48 sm:h-48 rounded-2xl shadow-inner"
+            />
+          ) : (
+            <div className="w-44 h-44 sm:w-48 sm:h-48 flex items-center justify-center text-slate-400">
+              <QrCode className="w-12 h-12 animate-pulse" />
+            </div>
+          )}
+          <div className="mt-1.5 text-center w-full">
+            <span className="text-xs font-black text-slate-900 font-changa block">
+              امسح الباركود بكاميرا الهاتف للدخول المباشر على الغرفة #{roomCode}
+            </span>
+            <div className="flex items-center justify-center gap-1.5 mt-1 flex-wrap">
+              <span className="text-[10px] text-emerald-800 bg-emerald-100 font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                <span>PeerJS WebRTC P2P + /api/state CORS</span>
+              </span>
+              <span className="text-[10px] text-purple-800 bg-purple-100 font-mono font-bold px-2 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
+                <Wifi className="w-3 h-3 text-purple-600" />
+                <span>Room #{roomCode}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Optional Custom Domain Override */}
+        <div className="mb-3 p-2.5 rounded-2xl bg-[#070B1A] border border-slate-800 space-y-1.5 text-right">
           <div className="flex items-center justify-between">
-            <span className="font-bold text-xs font-changa text-cyan-300 flex items-center gap-1.5">
-              <Globe className="w-4 h-4 text-cyan-400" />
-              <span>رابط التحكم من الهاتف:</span>
+            <span className="font-bold text-[11px] font-changa text-slate-300 flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>رابط الريموت (تلقائي):</span>
             </span>
             <button
               onClick={() => {
@@ -179,69 +320,30 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             <input
               type="text"
               dir="ltr"
-              placeholder="اختياري: https://your-domain.com أو نطاق GitHub Pages"
+              placeholder="اختياري: https://your-domain.com"
               value={tempDomainInput}
               onChange={(e) => setTempDomainInput(e.target.value)}
-              className="flex-1 bg-[#050814] border border-cyan-500/50 rounded-xl px-3 py-2 text-xs text-cyan-200 font-mono focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              className="flex-1 bg-[#050814] border border-slate-700 rounded-xl px-3 py-1.5 text-[11px] text-cyan-200 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-400"
             />
             <button
               onClick={handleSaveCustomDomain}
-              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold font-changa text-xs shadow-md shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold font-changa text-[11px] shrink-0"
             >
-              تطبيق الرابط
+              تطبيق
             </button>
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-            <span className="truncate dir-ltr font-mono text-[10px] text-slate-400 max-w-[240px]">
-              {remoteUrl}
-            </span>
             {isUsingCustomDomain && (
               <button
                 onClick={handleResetToCurrentOrigin}
-                className="text-rose-400 hover:text-rose-300 underline font-bold shrink-0 ml-2"
+                className="text-[10px] text-rose-400 hover:text-rose-300 underline font-bold shrink-0"
               >
-              العودة لرابط الموقع الحالي
+                افتراضي
               </button>
             )}
-          </div>
-          <p className="text-[10px] text-slate-500 leading-relaxed">
-            الرابط يتبع عنوان النشر المفتوح تلقائياً، بما فيه مسار المشاركة المباشر للهاتف.
-          </p>
-        </div>
-
-        {/* QR Code Container */}
-        <div className="flex flex-col items-center justify-center p-4 bg-white rounded-3xl shadow-2xl border-4 border-slate-300/40 my-3">
-          {qrDataUrl ? (
-            <img
-              src={qrDataUrl}
-              alt="Scan QR for Mobile Remote"
-              className="w-52 h-52 sm:w-60 sm:h-60 rounded-2xl shadow-inner"
-            />
-          ) : (
-            <div className="w-52 h-52 sm:w-60 sm:h-60 flex items-center justify-center text-slate-400">
-              <QrCode className="w-12 h-12 animate-pulse" />
-            </div>
-          )}
-          <div className="mt-2 text-center w-full">
-            <span className="text-xs font-black text-slate-900 font-changa block">
-              امسح الكود بكاميرا الهاتف لفتح ريموت التحكم
-            </span>
-            <div className="flex items-center justify-center gap-1.5 mt-1 flex-wrap">
-              <span className="text-[10px] text-emerald-800 bg-emerald-100 font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                <span>Multi-Channel Sync (WS + HTTP + WebRTC)</span>
-              </span>
-              <span className="text-[10px] text-purple-800 bg-purple-100 font-mono font-bold px-2 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
-                <Wifi className="w-3 h-3 text-purple-600" />
-                <span>غرفة {roomCode}</span>
-              </span>
-            </div>
           </div>
         </div>
 
         {/* Action Buttons: Copy Link & Open in Tab */}
-        <div className="flex items-center gap-2 mt-3">
+        <div className="flex items-center gap-2 mt-2">
           <button
             onClick={handleCopy}
             className="flex-1 py-3 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400/50 text-xs font-bold font-changa flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-indigo-600/30"
@@ -249,7 +351,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             {copied ? (
               <>
                 <Check className="w-4 h-4 text-emerald-300" />
-                <span className="text-emerald-200">تم نسخ رابط الريموت بنجاح!</span>
+                <span className="text-emerald-200">تم نسخ الرابط!</span>
               </>
             ) : (
               <>
@@ -264,7 +366,6 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
             target="_blank"
             rel="noopener noreferrer"
             className="py-3 px-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs font-bold font-changa flex items-center gap-1.5 transition-all shadow-md active:scale-95"
-            title="فتح الرابط في نافذة جديدة للتجربة"
           >
             <ExternalLink className="w-4 h-4 text-cyan-400" />
             <span>فتح الرابط</span>

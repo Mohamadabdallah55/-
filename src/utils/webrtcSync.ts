@@ -1,10 +1,11 @@
 import { Peer, DataConnection } from 'peerjs';
 
-type MessageHandler = (type: string, payload: unknown) => void;
+type MessageHandler = (type: string, payload: unknown, cmdId?: string) => void;
 type StatusHandler = (status: 'connected' | 'connecting' | 'disconnected', clientCount: number) => void;
 
-// High-reliability Google & Cloudflare STUN + OpenRelay TURN servers for NAT / Firewall traversal on mobile 4G/5G carriers
+// Fast, reliable STUN servers (no dead TURN servers that stall ICE gathering)
 const PEER_ICE_CONFIG = {
+  debug: 0,
   config: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -13,29 +14,31 @@ const PEER_ICE_CONFIG = {
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
       { urls: 'stun:stun.cloudflare.com:3478' },
-      {
-        urls: 'turn:openrelay.metered.ca:80',
-        username: 'openrelayproject',
-        credential: 'openrelayproject',
-      },
-      {
-        urls: 'turn:openrelay.metered.ca:443',
-        username: 'openrelayproject',
-        credential: 'openrelayproject',
-      },
-      {
-        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-        username: 'openrelayproject',
-        credential: 'openrelayproject',
-      },
     ],
   },
 };
 
+const HOST_SLOTS = ['', '-b', '-c'];
+
+export function normalizeFourDigitCode(raw?: string | null): string {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length >= 4) {
+    return digits.slice(-4);
+  }
+  return '';
+}
+
+export function generateFourDigitCode(): string {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
 class WebRTCSyncManager {
-  private peer: Peer | null = null;
+  // Host can hold up to 3 slot Peers for the same 4-digit room code so page reloads never get blocked by unavailable-id
+  private hostPeers: Map<string, Peer> = new Map();
+  private clientPeer: Peer | null = null;
   private connections: Map<string, DataConnection> = new Map();
-  private hostConnection: DataConnection | null = null;
+  private clientSlotConnections: Map<string, DataConnection> = new Map();
   private messageHandlers: Set<MessageHandler> = new Set();
   private statusHandlers: Set<StatusHandler> = new Set();
   private roomCode: string = '';
@@ -44,62 +47,58 @@ class WebRTCSyncManager {
   private fullStateProvider: (() => Record<string, unknown>) | null = null;
   private reconnectTimer: number | null = null;
   private heartbeatTimer: number | null = null;
-  private lastPongAt: number = Date.now();
+  private lastPongAt: number = 0;
   private reconnectAttempts: number = 0;
-  private hostIdRetryCount: number = 0;
+  private hostOpenSlots: Set<string> = new Set();
 
   constructor() {
     if (typeof window === 'undefined') return;
 
-    // Check if URL has a room query parameter (e.g. from QR scan on phone)
     const params = new URLSearchParams(window.location.search);
-    const roomFromUrl = params.get('room');
-    const isRemote =
+    const roomFromUrl = normalizeFourDigitCode(params.get('room'));
+    const isRemoteRoute =
       window.location.hash === '#remote' ||
       window.location.pathname.startsWith('/remote') ||
       params.get('mode') === 'remote' ||
       params.get('remote') === 'true' ||
       params.get('tab') === 'remote';
 
-    if (roomFromUrl) {
-      this.roomCode = roomFromUrl.toUpperCase().trim();
-      try {
-        localStorage.setItem('tahadi5_active_room', this.roomCode);
-        localStorage.setItem('tahadi5_host_room', this.roomCode);
-      } catch {}
-      this.isHost = false;
-    } else if (isRemote) {
+    if (isRemoteRoute || roomFromUrl) {
       const saved =
-        localStorage.getItem('tahadi5_active_room') ||
-        localStorage.getItem('tahadi5_host_room');
-      this.roomCode = saved || 'ELITE-ARENA';
-      this.isHost = false;
-    } else {
-      // Host screen (Laptop / PC): generate or reuse persistent room code
-      let hostCode =
-        localStorage.getItem('tahadi5_host_room') ||
-        localStorage.getItem('tahadi5_active_room');
-      if (!hostCode) {
-        const rand = Math.floor(1000 + Math.random() * 9000);
-        hostCode = `ELITE-${rand}`;
+        normalizeFourDigitCode(localStorage.getItem('tahadi5_active_room')) ||
+        normalizeFourDigitCode(localStorage.getItem('tahadi5_host_room'));
+      this.roomCode = roomFromUrl || saved || '1234';
+      this.saveRoomToStorage(this.roomCode);
+      this.isHost = !isRemoteRoute && !roomFromUrl ? true : false;
+      // Wait: if URL has ?room=XXXX but not #remote, check if mode=remote
+      if (isRemoteRoute || params.has('room')) {
+        this.isHost = false;
       }
-      try {
-        localStorage.setItem('tahadi5_host_room', hostCode);
-        localStorage.setItem('tahadi5_active_room', hostCode);
-      } catch {}
+    } else {
+      let hostCode =
+        normalizeFourDigitCode(localStorage.getItem('tahadi5_host_room')) ||
+        normalizeFourDigitCode(localStorage.getItem('tahadi5_active_room'));
+      if (!hostCode) {
+        hostCode = generateFourDigitCode();
+      }
       this.roomCode = hostCode;
+      this.saveRoomToStorage(this.roomCode);
       this.isHost = true;
     }
 
-    // Cleanly release Peer ID on page refresh/close so 0.peerjs.com frees the room ID immediately
     window.addEventListener('beforeunload', () => {
-      try {
-        this.peer?.destroy();
-      } catch {}
+      this.cleanup();
     });
 
     this.initPeer();
     this.startHeartbeat();
+  }
+
+  private saveRoomToStorage(code: string) {
+    try {
+      localStorage.setItem('tahadi5_host_room', code);
+      localStorage.setItem('tahadi5_active_room', code);
+    } catch {}
   }
 
   public setFullStateProvider(provider: () => Record<string, unknown>) {
@@ -114,31 +113,84 @@ class WebRTCSyncManager {
     return this.isHost;
   }
 
+  public isHostCloudReady(): boolean {
+    return this.hostOpenSlots.size > 0;
+  }
+
   public getStatus(): 'connected' | 'connecting' | 'disconnected' {
     return this.status;
   }
 
   public getClientCount(): number {
-    return this.connections.size;
+    if (this.isHost) {
+      let openCount = 0;
+      this.connections.forEach((conn) => {
+        if (conn.open) openCount += 1;
+      });
+      return openCount;
+    }
+    return this.hasOpenClientConnection() ? 1 : 0;
+  }
+
+  private hasOpenClientConnection(): boolean {
+    for (const conn of this.clientSlotConnections.values()) {
+      if (conn && conn.open) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Explicitly switches role between 'host' (Computer screen) and 'remote' (Phone controller).
+   * Guarantees that even if the user opens the main site on their phone and taps "Remote", it switches to client mode.
+   */
+  public setRole(role: 'host' | 'remote', optionalRoomCode?: string) {
+    const wantHost = role === 'host';
+    const normalizedNewRoom = normalizeFourDigitCode(optionalRoomCode);
+    const roomChanged = Boolean(normalizedNewRoom && normalizedNewRoom !== this.roomCode);
+
+    if (this.isHost === wantHost && !roomChanged) {
+      return;
+    }
+
+    this.isHost = wantHost;
+    if (normalizedNewRoom) {
+      this.roomCode = normalizedNewRoom;
+      this.saveRoomToStorage(this.roomCode);
+    }
+    this.reconnectNow();
   }
 
   public setRoomCode(newRoomCode: string) {
-    const cleaned = newRoomCode.toUpperCase().trim().replace(/[^A-Z0-9-]/g, '');
-    if (!cleaned || cleaned === this.roomCode) return;
+    const cleaned = normalizeFourDigitCode(newRoomCode);
+    if (!cleaned) return;
+    const changed = cleaned !== this.roomCode;
     this.roomCode = cleaned;
-    this.hostIdRetryCount = 0;
-    try {
-      localStorage.setItem('tahadi5_host_room', this.roomCode);
-      localStorage.setItem('tahadi5_active_room', this.roomCode);
-    } catch {}
-    this.cleanup();
-    this.initPeer();
-    this.startHeartbeat();
+    this.saveRoomToStorage(this.roomCode);
+
+    // Update URL query param ?room=XXXX without reloading so refreshes keep the code
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('room') !== this.roomCode && !this.isHost) {
+          url.searchParams.set('room', this.roomCode);
+          window.history.replaceState(null, '', url.toString());
+        }
+      } catch {}
+    }
+
+    if (changed || this.status !== 'connected') {
+      this.reconnectNow();
+    }
+  }
+
+  public generateNewRoomCode(): string {
+    const nextCode = generateFourDigitCode();
+    this.setRoomCode(nextCode);
+    return nextCode;
   }
 
   public reconnectNow() {
     this.reconnectAttempts = 0;
-    this.hostIdRetryCount = 0;
     this.cleanup();
     this.initPeer();
     this.startHeartbeat();
@@ -146,7 +198,7 @@ class WebRTCSyncManager {
 
   public onStatusChange(handler: StatusHandler): () => void {
     this.statusHandlers.add(handler);
-    handler(this.status, this.isHost ? this.connections.size : (this.status === 'connected' ? 1 : 0));
+    handler(this.status, this.getClientCount());
     return () => {
       this.statusHandlers.delete(handler);
     };
@@ -154,7 +206,7 @@ class WebRTCSyncManager {
 
   private updateStatus(newStatus: 'connected' | 'connecting' | 'disconnected') {
     this.status = newStatus;
-    const count = this.isHost ? this.connections.size : (newStatus === 'connected' ? 1 : 0);
+    const count = this.getClientCount();
     this.statusHandlers.forEach((handler) => {
       try {
         handler(newStatus, count);
@@ -162,77 +214,110 @@ class WebRTCSyncManager {
     });
   }
 
+  private getPeerIdForSlot(slotSuffix: string): string {
+    return `elite-clash-room-${this.roomCode}${slotSuffix}`;
+  }
+
   private initPeer() {
+    if (typeof window === 'undefined') return;
     try {
       this.updateStatus('connecting');
 
       if (this.isHost) {
-        // Host registers fixed room ID so existing QR codes on phones always stay valid
-        const peerId = `tahadi5-${this.roomCode.toLowerCase()}`;
-        this.peer = new Peer(peerId, PEER_ICE_CONFIG);
+        // Register Host on primary slot immediately, and backup slot -b so reloads are never blocked by unavailable-id
+        this.initHostSlot('');
+        this.initHostSlot('-b');
+      } else {
+        // Remote Controller (Phone)
+        this.clientPeer = new Peer(PEER_ICE_CONFIG);
 
-        this.peer.on('open', () => {
+        this.clientPeer.on('open', () => {
           this.reconnectAttempts = 0;
-          this.hostIdRetryCount = 0;
-          this.updateStatus(this.connections.size > 0 ? 'connected' : 'connecting');
+          this.connectToHostSlots();
         });
 
-        this.peer.on('connection', (conn) => {
-          this.setupHostConnection(conn);
-        });
-
-        this.peer.on('error', (err) => {
-          if (err.type === 'unavailable-id') {
-            // Do NOT change the roomCode! Changing roomCode invalidates the phone's QR code.
-            // Instead, wait briefly for the previous page unload session on PeerJS server to expire and retry the same roomCode.
-            this.peer?.destroy();
-            this.peer = null;
-            this.hostIdRetryCount += 1;
-            const retryDelay = Math.min(4000, 1000 * this.hostIdRetryCount);
-            this.updateStatus('connecting');
-            window.setTimeout(() => this.initPeer(), retryDelay);
-          } else {
+        this.clientPeer.on('error', () => {
+          if (!this.hasOpenClientConnection()) {
             this.updateStatus('disconnected');
-            window.setTimeout(() => this.restartPeer(), 2500);
+            this.scheduleReconnect(true);
           }
         });
-        this.peer.on('disconnected', () => {
-          this.updateStatus('disconnected');
-          window.setTimeout(() => {
+
+        this.clientPeer.on('disconnected', () => {
+          if (!this.hasOpenClientConnection()) {
+            this.updateStatus('disconnected');
             try {
-              if (this.peer && !this.peer.destroyed) {
-                this.peer.reconnect();
-              } else {
-                this.restartPeer();
+              if (this.clientPeer && !this.clientPeer.destroyed) {
+                this.clientPeer.reconnect();
               }
-            } catch {
-              this.restartPeer();
-            }
-          }, 1000);
-        });
-      } else {
-        // Client (Phone Remote)
-        this.peer = new Peer(PEER_ICE_CONFIG);
-
-        this.peer.on('open', () => {
-          this.reconnectAttempts = 0;
-          this.connectToHost();
-        });
-
-        this.peer.on('error', () => {
-          this.updateStatus('disconnected');
-          this.scheduleReconnect();
-        });
-        this.peer.on('disconnected', () => {
-          this.hostConnection = null;
-          this.updateStatus('disconnected');
-          this.scheduleReconnect(true);
+            } catch {}
+            this.scheduleReconnect(false);
+          }
         });
       }
     } catch (e) {
-      console.warn('WebRTC peer error:', e);
+      console.warn('WebRTC peer init error:', e);
       this.updateStatus('disconnected');
     }
+  }
+
+  private initHostSlot(slotSuffix: string) {
+    if (!this.isHost) return;
+    const peerId = this.getPeerIdForSlot(slotSuffix);
+    if (this.hostPeers.has(slotSuffix)) {
+      const existing = this.hostPeers.get(slotSuffix);
+      if (existing && !existing.destroyed) return;
+    }
+
+    try {
+      const p = new Peer(peerId, PEER_ICE_CONFIG);
+      this.hostPeers.set(slotSuffix, p);
+
+      p.on('open', () => {
+        this.hostOpenSlots.add(slotSuffix);
+        this.updateStatus(this.getClientCount() > 0 ? 'connected' : 'connecting');
+      });
+
+      p.on('connection', (conn) => {
+        this.setupHostConnection(conn);
+      });
+
+      p.on('error', (err) => {
+        this.hostOpenSlots.delete(slotSuffix);
+        try {
+          p.destroy();
+        } catch {}
+        this.hostPeers.delete(slotSuffix);
+
+        if (err.type === 'unavailable-id') {
+          // If primary and -b are occupied by a recent page refresh, also open -c immediately
+          if (slotSuffix === '' || slotSuffix === '-b') {
+            this.initHostSlot('-c');
+          }
+          // Retry claiming this slot after 3.5s
+          window.setTimeout(() => {
+            if (this.isHost && !this.hostPeers.has(slotSuffix)) {
+              this.initHostSlot(slotSuffix);
+            }
+          }, 3500);
+        } else {
+          window.setTimeout(() => {
+            if (this.isHost && !this.hostPeers.has(slotSuffix)) {
+              this.initHostSlot(slotSuffix);
+            }
+          }, 2500);
+        }
+      });
+
+      p.on('disconnected', () => {
+        this.hostOpenSlots.delete(slotSuffix);
+        try {
+          if (!p.destroyed) {
+            p.reconnect();
+          }
+        } catch {}
+      });
+    } catch {}
   }
 
   private setupHostConnection(conn: DataConnection) {
@@ -240,13 +325,8 @@ class WebRTCSyncManager {
       this.connections.set(conn.peer, conn);
       this.updateStatus('connected');
 
-      // Send initial full state to newly connected smartphone
-      if (this.fullStateProvider) {
-        try {
-          const state = this.fullStateProvider();
-          conn.send(JSON.stringify({ type: 'FULL_STATE_SYNC', payload: state }));
-        } catch {}
-      }
+      // Immediately push full state to newly connected phone over DataChannel
+      this.sendFullStateToConnection(conn);
     });
 
     conn.on('data', (data) => {
@@ -255,100 +335,173 @@ class WebRTCSyncManager {
 
     conn.on('close', () => {
       this.connections.delete(conn.peer);
-      this.updateStatus(this.connections.size > 0 ? 'connected' : 'connecting');
+      this.updateStatus(this.getClientCount() > 0 ? 'connected' : 'connecting');
     });
 
     conn.on('error', () => {
       this.connections.delete(conn.peer);
-      this.updateStatus(this.connections.size > 0 ? 'connected' : 'connecting');
+      this.updateStatus(this.getClientCount() > 0 ? 'connected' : 'connecting');
     });
   }
 
-  private connectToHost() {
-    if (!this.peer || this.peer.destroyed) return;
-
+  private sendFullStateToConnection(conn: DataConnection) {
+    if (!this.fullStateProvider || !conn.open) return;
     try {
+      const state = this.fullStateProvider();
+      conn.send(
+        JSON.stringify({
+          type: 'FULL_STATE_SYNC',
+          payload: state,
+        })
+      );
+      conn.send(
+        JSON.stringify({
+          type: 'state',
+          payload: state,
+        })
+      );
+    } catch {}
+  }
+
+  private connectToHostSlots() {
+    if (!this.clientPeer || this.clientPeer.destroyed || this.isHost) return;
+
+    if (!this.hasOpenClientConnection()) {
       this.updateStatus('connecting');
-      const targetPeerId = `tahadi5-${this.roomCode.toLowerCase()}`;
-      const conn = this.peer.connect(targetPeerId, { reliable: true });
-
-      conn.on('open', () => {
-        this.hostConnection = conn;
-        this.lastPongAt = Date.now();
-        this.reconnectAttempts = 0;
-        this.updateStatus('connected');
-      });
-
-      conn.on('data', (data) => {
-        this.handleIncomingData(data);
-      });
-
-      conn.on('close', () => {
-        this.hostConnection = null;
-        this.updateStatus('disconnected');
-        this.scheduleReconnect();
-      });
-
-      conn.on('error', () => {
-        this.hostConnection = null;
-        this.updateStatus('disconnected');
-        this.scheduleReconnect();
-      });
-    } catch {
-      this.updateStatus('disconnected');
-      this.scheduleReconnect();
     }
+
+    HOST_SLOTS.forEach((slotSuffix) => {
+      const existing = this.clientSlotConnections.get(slotSuffix);
+      if (existing && existing.open) return;
+      try {
+        existing?.close();
+      } catch {}
+
+      const targetPeerId = this.getPeerIdForSlot(slotSuffix);
+      try {
+        const conn = this.clientPeer!.connect(targetPeerId, {
+          reliable: true,
+          serialization: 'json',
+        });
+
+        this.clientSlotConnections.set(slotSuffix, conn);
+
+        conn.on('open', () => {
+          this.lastPongAt = Date.now();
+          this.reconnectAttempts = 0;
+          this.updateStatus('connected');
+          // Request full state immediately upon DataChannel open
+          try {
+            conn.send(JSON.stringify({ type: 'REQUEST_FULL_SYNC', payload: { timestamp: Date.now() } }));
+          } catch {}
+        });
+
+        conn.on('data', (data) => {
+          this.lastPongAt = Date.now();
+          if (this.status !== 'connected') {
+            this.updateStatus('connected');
+          }
+          this.handleIncomingData(data);
+        });
+
+        conn.on('close', () => {
+          this.clientSlotConnections.delete(slotSuffix);
+          if (!this.hasOpenClientConnection()) {
+            this.updateStatus('disconnected');
+            this.scheduleReconnect(false);
+          }
+        });
+
+        conn.on('error', () => {
+          this.clientSlotConnections.delete(slotSuffix);
+          if (!this.hasOpenClientConnection()) {
+            this.scheduleReconnect(false);
+          }
+        });
+      } catch {}
+    });
   }
 
   private scheduleReconnect(recreatePeer = false) {
-    if (this.reconnectTimer) return;
-    const delay = Math.min(4000, 1000 * Math.max(1, (this.reconnectAttempts % 4) + 1));
+    if (this.reconnectTimer || this.isHost) return;
+    const delay = Math.min(2500, 900 + (this.reconnectAttempts % 3) * 500);
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       this.reconnectAttempts += 1;
-      if (!this.isHost && (!this.hostConnection || !this.hostConnection.open)) {
-        if (recreatePeer || !this.peer || this.peer.destroyed || this.peer.disconnected || this.reconnectAttempts % 3 === 0) {
-          this.restartPeer();
+      if (!this.isHost && !this.hasOpenClientConnection()) {
+        if (
+          recreatePeer ||
+          !this.clientPeer ||
+          this.clientPeer.destroyed ||
+          this.clientPeer.disconnected ||
+          this.reconnectAttempts % 4 === 0
+        ) {
+          this.restartClientPeer();
         } else {
-          this.connectToHost();
+          this.connectToHostSlots();
         }
       }
     }, delay);
   }
 
-  private restartPeer() {
+  private restartClientPeer() {
     try {
-      this.hostConnection?.close();
-      this.hostConnection = null;
-      this.peer?.destroy();
+      this.clientSlotConnections.forEach((c) => c.close());
+      this.clientSlotConnections.clear();
+      this.clientPeer?.destroy();
     } catch {}
-    this.peer = null;
-    window.setTimeout(() => this.initPeer(), 300);
+    this.clientPeer = null;
+    window.setTimeout(() => this.initPeer(), 150);
   }
 
   private startHeartbeat() {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = window.setInterval(() => {
-      if (!this.isHost && this.hostConnection && this.hostConnection.open) {
-        try {
-          this.hostConnection.send(JSON.stringify({ type: 'PING' }));
-        } catch {}
-        if (Date.now() - this.lastPongAt > 12000) {
-          this.updateStatus('disconnected');
-          this.scheduleReconnect(true);
+      if (this.isHost) {
+        // Ensure at least one Host slot is open on PeerJS cloud
+        if (this.hostOpenSlots.size === 0) {
+          this.initHostSlot('');
+          this.initHostSlot('-b');
         }
-      } else if (!this.isHost) {
-        this.scheduleReconnect(!this.peer || this.peer.destroyed || this.peer.disconnected);
+        // Periodically push live state snapshot to all connected phones over DataChannel
+        if (this.getClientCount() > 0 && this.fullStateProvider) {
+          const state = this.fullStateProvider();
+          const msg = JSON.stringify({ type: 'FULL_STATE_SYNC', payload: state });
+          this.connections.forEach((conn) => {
+            if (conn.open) {
+              try {
+                conn.send(msg);
+              } catch {}
+            }
+          });
+        }
+      } else {
+        // Remote Phone heartbeat
+        if (this.hasOpenClientConnection()) {
+          this.clientSlotConnections.forEach((conn) => {
+            if (conn.open) {
+              try {
+                conn.send(JSON.stringify({ type: 'PING' }));
+              } catch {}
+            }
+          });
+          if (this.lastPongAt > 0 && Date.now() - this.lastPongAt > 10000) {
+            this.updateStatus('disconnected');
+            this.scheduleReconnect(true);
+          }
+        } else {
+          this.connectToHostSlots();
+        }
       }
-    }, 3000);
+    }, 2000);
   }
 
   private handleIncomingData(data: unknown, senderPeerId?: string) {
     try {
-      const str = typeof data === 'string' ? data : JSON.stringify(data);
-      const parsed = JSON.parse(str);
+      const parsed = typeof data === 'string' ? JSON.parse(data) : (data as Record<string, any>);
+      if (!parsed || typeof parsed !== 'object') return;
 
-      if (parsed?.type === 'PING') {
+      if (parsed.type === 'PING') {
         if (this.isHost && senderPeerId) {
           const conn = this.connections.get(senderPeerId);
           conn?.send(JSON.stringify({ type: 'PONG' }));
@@ -356,26 +509,39 @@ class WebRTCSyncManager {
         return;
       }
 
-      if (parsed?.type === 'PONG') {
+      if (parsed.type === 'PONG') {
         this.lastPongAt = Date.now();
         this.updateStatus('connected');
         return;
       }
 
-      if (parsed && parsed.type) {
-        // Dispatch to local subscribers
-        this.messageHandlers.forEach((handler) => {
-          try {
-            handler(parsed.type, parsed.payload);
-          } catch {}
-        });
+      if (parsed.type === 'REQUEST_FULL_SYNC' && this.isHost && senderPeerId) {
+        const conn = this.connections.get(senderPeerId);
+        if (conn) this.sendFullStateToConnection(conn);
+        return;
+      }
 
-        // If host, rebroadcast to all other connected clients
+      // Unwrap 'remote_action' or 'state' envelopes if sent in that format
+      if (parsed.type === 'remote_action' && parsed.action) {
+        this.dispatchToHandlers(parsed.action, parsed.payload, parsed.cmdId);
+        return;
+      }
+
+      if (parsed.type === 'state' && parsed.payload) {
+        this.dispatchToHandlers('FULL_STATE_SYNC', parsed.payload, parsed.cmdId);
+        return;
+      }
+
+      if (parsed.type) {
+        this.dispatchToHandlers(parsed.type, parsed.payload, parsed.cmdId);
+
+        // If host received an action from a phone, rebroadcast to any other connected screens/phones
         if (this.isHost) {
+          const rawStr = typeof data === 'string' ? data : JSON.stringify(data);
           this.connections.forEach((conn, peerId) => {
             if (peerId !== senderPeerId && conn.open) {
               try {
-                conn.send(str);
+                conn.send(rawStr);
               } catch {}
             }
           });
@@ -384,21 +550,45 @@ class WebRTCSyncManager {
     } catch {}
   }
 
-  public broadcast(type: string, payload: unknown) {
-    const message = JSON.stringify({ type, payload });
+  private dispatchToHandlers(type: string, payload: unknown, cmdId?: string) {
+    this.messageHandlers.forEach((handler) => {
+      try {
+        handler(type, payload, cmdId);
+      } catch {}
+    });
+  }
+
+  public broadcast(type: string, payload: unknown, cmdId?: string) {
+    const packet = JSON.stringify({
+      type,
+      payload,
+      cmdId,
+    });
+    const actionPacket = JSON.stringify({
+      type: this.isHost ? 'state' : 'remote_action',
+      action: type,
+      payload: this.isHost && this.fullStateProvider ? this.fullStateProvider() : payload,
+      cmdId,
+    });
 
     if (this.isHost) {
       this.connections.forEach((conn) => {
         if (conn.open) {
           try {
-            conn.send(message);
+            conn.send(packet);
           } catch {}
         }
       });
-    } else if (this.hostConnection && this.hostConnection.open) {
-      try {
-        this.hostConnection.send(message);
-      } catch {}
+    } else {
+      // Send on first open slot connection (or all open slot connections, deduplicated by cmdId on Host)
+      this.clientSlotConnections.forEach((conn) => {
+        if (conn.open) {
+          try {
+            conn.send(packet);
+            conn.send(actionPacket);
+          } catch {}
+        }
+      });
     }
   }
 
@@ -411,14 +601,39 @@ class WebRTCSyncManager {
 
   private cleanup() {
     try {
-      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-      if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-      this.connections.forEach((conn) => conn.close());
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      if (this.heartbeatTimer) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
+      }
+      this.connections.forEach((conn) => {
+        try {
+          conn.close();
+        } catch {}
+      });
       this.connections.clear();
-      this.hostConnection?.close();
-      this.hostConnection = null;
-      this.peer?.destroy();
-      this.peer = null;
+      this.clientSlotConnections.forEach((conn) => {
+        try {
+          conn.close();
+        } catch {}
+      });
+      this.clientSlotConnections.clear();
+      this.hostPeers.forEach((p) => {
+        try {
+          p.destroy();
+        } catch {}
+      });
+      this.hostPeers.clear();
+      this.hostOpenSlots.clear();
+      if (this.clientPeer) {
+        try {
+          this.clientPeer.destroy();
+        } catch {}
+        this.clientPeer = null;
+      }
       this.updateStatus('disconnected');
     } catch {}
   }

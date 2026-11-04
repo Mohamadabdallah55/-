@@ -154,14 +154,60 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   const [connStatus, setConnStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const [roomCode, setRoomCodeState] = useState<string>(() => webrtcSync.getRoomCode());
   const [isEditingRoom, setIsEditingRoom] = useState<boolean>(false);
-  const [roomInputDraft, setRoomInputDraft] = useState<string>('');
+  const [showRoomModal, setShowRoomModal] = useState<boolean>(false);
+  const [roomInputDraft, setRoomInputDraft] = useState<string>(() => webrtcSync.getRoomCode());
+  const [hasDismissedModalOnce, setHasDismissedModalOnce] = useState<boolean>(false);
 
   useEffect(() => {
-    return subscribeToConnectionStatus((status) => {
+    const params = new URLSearchParams(window.location.search);
+    const roomFromUrl = params.get('room');
+    webrtcSync.setRole('remote', roomFromUrl || undefined);
+    setRoomCodeState(webrtcSync.getRoomCode());
+    setRoomInputDraft(webrtcSync.getRoomCode());
+
+    const unsub = subscribeToConnectionStatus((status) => {
       setConnStatus(status);
       setRoomCodeState(webrtcSync.getRoomCode());
+      if (status === 'connected') {
+        setShowRoomModal(false);
+        setIsEditingRoom(false);
+      }
     });
+
+    return () => {
+      unsub();
+    };
   }, []);
+
+  // Requirement #3: If phone does not connect within 2 seconds, automatically show the clear 4-digit room code input box
+  useEffect(() => {
+    if (connStatus === 'connected' || hasDismissedModalOnce) return;
+    const timer = window.setTimeout(() => {
+      if (webrtcSync.getStatus() !== 'connected') {
+        setRoomInputDraft(webrtcSync.getRoomCode());
+        setShowRoomModal(true);
+      }
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [connStatus, hasDismissedModalOnce]);
+
+  const handleConnectToFourDigitRoom = (codeToUse?: string) => {
+    const raw = (codeToUse ?? roomInputDraft).replace(/\D/g, '').slice(0, 4);
+    if (raw.length !== 4) {
+      showFeedback('⚠️ يرجى إدخال رمز الغرفة المكون من 4 أرقام (مثال: 1234)');
+      return;
+    }
+    triggerHaptic([25, 40]);
+    sound.playTick();
+    webrtcSync.setRole('remote', raw);
+    webrtcSync.setRoomCode(raw);
+    setRoomCodeState(raw);
+    setRoomInputDraft(raw);
+    forceReconnectAll();
+    setShowRoomModal(false);
+    setIsEditingRoom(false);
+    showFeedback(`⚡ جاري الربط المباشر مع الغرفة #${raw}...`);
+  };
 
   const triggerHaptic = (ms: number | number[] = 30) => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -428,39 +474,42 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
                   onClick={() => {
                     triggerHaptic(15);
                     setRoomInputDraft(roomCode);
-                    setIsEditingRoom((prev) => !prev);
+                    setShowRoomModal(true);
                   }}
-                  className="text-[10px] font-mono text-cyan-300 font-bold bg-cyan-950/70 border border-cyan-500/40 px-1.5 py-0.5 rounded-md active:scale-95"
-                  title="اضغط لتغيير رقم الغرفة أو مطابقته مع اللابتوب"
+                  className="text-[11px] font-mono text-cyan-200 font-black bg-cyan-950/90 border border-cyan-400/60 px-2 py-0.5 rounded-lg active:scale-95 flex items-center gap-1 shadow-sm"
+                  title="اضغط لإدخال رمز الغرفة المكون من 4 أرقام"
                 >
-                  #{roomCode}
+                  <span>غرفة #{roomCode}</span>
                 </button>
               </div>
               <button
                 onClick={() => {
                   triggerHaptic(20);
                   sound.playTick();
-                  forceReconnectAll();
-                  setRoomCodeState(webrtcSync.getRoomCode());
-                  showFeedback('🔄 جاري إعادة الاتصال ومزامنة البيانات...');
+                  if (connStatus !== 'connected') {
+                    setRoomInputDraft(roomCode);
+                    setShowRoomModal(true);
+                  } else {
+                    forceReconnectAll();
+                    setRoomCodeState(webrtcSync.getRoomCode());
+                    showFeedback('🔄 تم تحديث الاتصال والمزامنة بنجاح');
+                  }
                 }}
                 className="flex items-center gap-1.5 text-[10px] text-slate-300 hover:text-white"
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${
+                  className={`w-2 h-2 rounded-full ${
                     connStatus === 'connected'
-                      ? 'bg-emerald-400'
+                      ? 'bg-emerald-400 animate-pulse'
                       : connStatus === 'connecting'
-                      ? 'bg-amber-400 animate-pulse'
+                      ? 'bg-amber-400 animate-ping'
                       : 'bg-rose-400'
                   }`}
                 />
-                <span>
+                <span className={connStatus === 'connected' ? 'text-emerald-300 font-bold' : 'text-amber-300 font-bold'}>
                   {connStatus === 'connected'
-                    ? 'متصل بالشاشة مباشرة 🟢'
-                    : connStatus === 'connecting'
-                    ? 'جاري الاتصال... (اضغط للتحديث)'
-                    : 'اضغط هنا لإعادة الاتصال 🔄'}
+                    ? `متصل بالكمبيوتر مباشرة 🟢 (#${roomCode})`
+                    : 'غير متصل — اضغط لإدخال الـ 4 أرقام ⚡'}
                 </span>
               </button>
             </div>
@@ -517,6 +566,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic(15);
+                  webrtcSync.setRole('host');
                   onClose();
                 }}
                 className="p-1.5 text-slate-300 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800"
@@ -528,47 +578,141 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
           </div>
         </div>
 
-        {/* Manual Room Code Pairing Drawer (if user taps #ELITE-XXXX) */}
-        {isEditingRoom && (
-          <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-cyan-300 shrink-0">رمز الغرفة:</span>
+        {/* Inline 4-Digit Quick Connect Bar whenever not connected or when editing room */}
+        {(connStatus !== 'connected' || isEditingRoom) && (
+          <div className="mt-2 pt-2 border-t border-cyan-500/30 flex items-center gap-2 bg-cyan-950/20 px-2 py-1.5 rounded-xl">
+            <span className="text-[11px] font-black text-cyan-300 shrink-0">رمز الـ 4 أرقام:</span>
             <input
-              type="text"
+              type="tel"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
               dir="ltr"
               value={roomInputDraft}
-              onChange={(e) => setRoomInputDraft(e.target.value.toUpperCase())}
-              placeholder="مثال: ELITE-1234"
-              className="flex-1 bg-[#060913] border border-cyan-500/50 rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none"
+              onChange={(e) => setRoomInputDraft(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="1234"
+              className="w-24 bg-[#050814] border-2 border-cyan-400/80 rounded-xl px-2 py-1 text-base font-black font-mono text-center text-white tracking-[0.25em] focus:outline-none"
             />
             <button
-              onClick={() => {
-                triggerHaptic(25);
-                const cleaned = roomInputDraft.trim().toUpperCase();
-                if (cleaned) {
-                  webrtcSync.setRoomCode(cleaned);
-                  setRoomCodeState(webrtcSync.getRoomCode());
-                  forceReconnectAll();
-                  showFeedback(`✓ تم الربط مع غرفة #${webrtcSync.getRoomCode()}`);
-                }
-                setIsEditingRoom(false);
-              }}
-              className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold shrink-0"
+              onClick={() => handleConnectToFourDigitRoom()}
+              className="flex-1 py-1.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 active:from-emerald-500 active:to-cyan-500 text-white text-xs font-black font-changa shadow-md active:scale-95 flex items-center justify-center gap-1"
             >
-              ربط
+              <Zap className="w-3.5 h-3.5" />
+              <span>اتصال فوري ⚡</span>
             </button>
             <button
               onClick={() => {
-                triggerHaptic(20);
-                forceReconnectAll();
-                setRoomCodeState(webrtcSync.getRoomCode());
-                setIsEditingRoom(false);
-                showFeedback('🔄 تم تحديث الاتصال تلقائياً');
+                triggerHaptic(15);
+                setRoomInputDraft(roomCode);
+                setShowRoomModal(true);
               }}
-              className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold shrink-0 flex items-center gap-1"
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 text-cyan-300 text-[11px] font-bold border border-slate-700"
             >
-              <RefreshCw className="w-3 h-3" />
-              <span>تحديث</span>
+              لوحة الأرقام
             </button>
+          </div>
+        )}
+
+        {/* Prominent 2-Second Auto-Popup Modal for 4-Digit Room Code Entry */}
+        {showRoomModal && (
+          <div className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-[#0B122B] border-2 border-cyan-400/80 rounded-3xl max-w-sm w-full p-5 shadow-2xl text-center relative">
+              <button
+                onClick={() => {
+                  setShowRoomModal(false);
+                  setHasDismissedModalOnce(true);
+                }}
+                className="absolute top-3.5 left-3.5 p-2 rounded-xl bg-slate-800/90 text-slate-300 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white mx-auto mb-3 shadow-lg shadow-cyan-500/30">
+                <Smartphone className="w-6 h-6" />
+              </div>
+
+              <h3 className="text-lg font-black font-changa text-white">
+                ربط الهاتف بشاشة الكمبيوتر
+              </h3>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                أدخل رمز الغرفة المكون من <span className="text-cyan-300 font-black">4 أرقام</span> الظاهر في نافذة (ربط الهاتف) على الكمبيوتر:
+              </p>
+
+              {/* 4-Digit Display / Input */}
+              <div className="my-4">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  dir="ltr"
+                  value={roomInputDraft}
+                  onChange={(e) => {
+                    const next = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setRoomInputDraft(next);
+                  }}
+                  placeholder="1234"
+                  className="w-full bg-[#050814] border-2 border-cyan-400 rounded-2xl py-3 px-4 text-4xl font-black font-mono text-center text-white tracking-[0.45em] shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </div>
+
+              {/* Built-in Fast Touch Numeric Keypad */}
+              <div className="grid grid-cols-3 gap-2 mb-4" dir="ltr">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                  <button
+                    key={digit}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic(15);
+                      setRoomInputDraft((prev) => (prev.length >= 4 ? digit : (prev + digit).slice(0, 4)));
+                    }}
+                    className="py-2.5 rounded-xl bg-slate-900 active:bg-cyan-900 border border-slate-700 text-xl font-black font-mono text-white active:scale-95"
+                  >
+                    {digit}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic(15);
+                    setRoomInputDraft('');
+                  }}
+                  className="py-2.5 rounded-xl bg-rose-950/70 active:bg-rose-900 border border-rose-700/50 text-xs font-bold text-rose-200 active:scale-95"
+                >
+                  مسح الكل
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic(15);
+                    setRoomInputDraft((prev) => (prev.length >= 4 ? '0' : (prev + '0').slice(0, 4)));
+                  }}
+                  className="py-2.5 rounded-xl bg-slate-900 active:bg-cyan-900 border border-slate-700 text-xl font-black font-mono text-white active:scale-95"
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic(15);
+                    setRoomInputDraft((prev) => prev.slice(0, -1));
+                  }}
+                  className="py-2.5 rounded-xl bg-slate-800 active:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-200 active:scale-95"
+                >
+                  ⌫ حذف
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleConnectToFourDigitRoom()}
+                disabled={roomInputDraft.replace(/\D/g, '').length !== 4}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-40 text-slate-950 font-black font-changa text-base shadow-lg shadow-emerald-500/25 active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Zap className="w-5 h-5 fill-current" />
+                <span>اتصال فوري بالغرفة #{roomInputDraft.padEnd(4, '•')}</span>
+              </button>
+            </div>
           </div>
         )}
 
