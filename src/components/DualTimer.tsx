@@ -21,7 +21,7 @@ import {
 import { sound } from '../utils/audio';
 import { Team } from '../types';
 import { revealWithGsap } from '../utils/gsapMotion';
-import { subscribeToBroadcast } from '../utils/storage';
+import { broadcastMessage, subscribeToBroadcast } from '../utils/storage';
 
 interface DualTimerProps {
   teamA?: Team;
@@ -53,35 +53,39 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   const [teamBActive, setTeamBActive] = useState<boolean>(false);
   const [teamBFinished, setTeamBFinished] = useState<boolean>(false);
 
-  // High performance refs for smooth, non-blocking time updates
+  // High performance refs for sub-millisecond accuracy (performance.now())
   const teamAStartRef = useRef<number>(0);
   const teamBStartRef = useRef<number>(0);
 
-  // Interval for Team A (50ms interval = lightweight 20fps without UI freeze)
+  // High-precision ~60fps (16ms) loop for Team A
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let rafId: number | null = null;
     if (teamAActive) {
-      teamAStartRef.current = Date.now() - teamAMs;
-      interval = setInterval(() => {
-        setTeamAMs(Date.now() - teamAStartRef.current);
-      }, 50);
+      teamAStartRef.current = performance.now() - teamAMs;
+      const tick = () => {
+        setTeamAMs(Math.max(0, Math.round(performance.now() - teamAStartRef.current)));
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
     }
     return () => {
-      if (interval) clearInterval(interval);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [teamAActive]);
 
-  // Interval for Team B
+  // High-precision ~60fps (16ms) loop for Team B
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let rafId: number | null = null;
     if (teamBActive) {
-      teamBStartRef.current = Date.now() - teamBMs;
-      interval = setInterval(() => {
-        setTeamBMs(Date.now() - teamBStartRef.current);
-      }, 50);
+      teamBStartRef.current = performance.now() - teamBMs;
+      const tick = () => {
+        setTeamBMs(Math.max(0, Math.round(performance.now() - teamBStartRef.current)));
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
     }
     return () => {
-      if (interval) clearInterval(interval);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [teamBActive]);
 
@@ -90,18 +94,53 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   const [expandedTimer, setExpandedTimer] = useState<'none' | 'countdown' | 'stopwatch'>('none');
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Sync duel settings & status to the phone remote so Blind Mode, Target Time, and Lock states match automatically
+  useEffect(() => {
+    broadcastMessage('DUEL_STATE_SYNC', {
+      targetSeconds,
+      isBlindChallenge,
+      teamAActive,
+      teamAFinished,
+      teamAMs: teamAFinished ? teamAMs : 0,
+      teamBActive,
+      teamBFinished,
+      teamBMs: teamBFinished ? teamBMs : 0,
+    });
+  }, [
+    targetSeconds,
+    isBlindChallenge,
+    teamAActive,
+    teamAFinished,
+    teamBActive,
+    teamBFinished,
+  ]);
+
   // Commands sent from the phone remote. Keeping this listener inside the timer
   // makes the same controls work in the main tab and the standalone timer screen.
   useEffect(() => subscribeToBroadcast((type, payload) => {
     if (type === 'STOP_TIMER_P1') {
       sound.playPick('ban');
+      const exactMs =
+        payload && typeof (payload as { exactMs?: number }).exactMs === 'number'
+          ? Math.max(10, Math.round((payload as { exactMs: number }).exactMs))
+          : teamAActive
+          ? Math.max(10, Math.round(performance.now() - teamAStartRef.current))
+          : teamAMs;
       setTeamAActive(false);
+      setTeamAMs(exactMs);
       setTeamAFinished(true);
       return;
     }
     if (type === 'STOP_TIMER_P2') {
       sound.playPick('ban');
+      const exactMs =
+        payload && typeof (payload as { exactMs?: number }).exactMs === 'number'
+          ? Math.max(10, Math.round((payload as { exactMs: number }).exactMs))
+          : teamBActive
+          ? Math.max(10, Math.round(performance.now() - teamBStartRef.current))
+          : teamBMs;
       setTeamBActive(false);
+      setTeamBMs(exactMs);
       setTeamBFinished(true);
       return;
     }
@@ -112,6 +151,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
       delta?: number;
       target?: number;
       blind?: boolean;
+      exactMs?: number;
       mode?: 'none' | 'countdown' | 'stopwatch';
     };
     const seconds = Math.max(1, Math.min(3600, Number(command.seconds) || countdownInitial));
@@ -141,7 +181,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
       setCountdownLeft((prev) => Math.max(1, Math.min(3600, prev + command.delta!)));
     }
     if (command.action === 'set_target' && typeof command.target === 'number') {
-      setTargetSeconds(Math.max(1, Math.min(300, command.target)));
+      setTargetSeconds(Math.max(0.5, Math.min(300, command.target)));
     }
     if (command.action === 'set_blind' && typeof command.blind === 'boolean') {
       setIsBlindChallenge(command.blind);
@@ -151,6 +191,8 @@ export const DualTimer: React.FC<DualTimerProps> = ({
     }
     if (command.action === 'duel_start_both') {
       sound.playPick('pick');
+      teamAStartRef.current = performance.now();
+      teamBStartRef.current = performance.now();
       setTeamAMs(0);
       setTeamBMs(0);
       setTeamAFinished(false);
@@ -168,13 +210,59 @@ export const DualTimer: React.FC<DualTimerProps> = ({
       setTeamAMs(0);
       setTeamBMs(0);
     }
+    if (command.action === 'duel_start_a') {
+      sound.playPick('pick');
+      teamAStartRef.current = performance.now();
+      setTeamAMs(0);
+      setTeamAFinished(false);
+      setTeamAActive(true);
+    }
+    if (command.action === 'duel_stop_a') {
+      sound.playPick('ban');
+      const finalMs =
+        typeof command.exactMs === 'number' && command.exactMs > 0
+          ? Math.round(command.exactMs)
+          : Math.max(10, Math.round(performance.now() - teamAStartRef.current));
+      setTeamAActive(false);
+      setTeamAMs(finalMs);
+      setTeamAFinished(true);
+    }
+    if (command.action === 'duel_reset_a') {
+      sound.playTick();
+      setTeamAActive(false);
+      setTeamAFinished(false);
+      setTeamAMs(0);
+    }
+    if (command.action === 'duel_start_b') {
+      sound.playPick('pick');
+      teamBStartRef.current = performance.now();
+      setTeamBMs(0);
+      setTeamBFinished(false);
+      setTeamBActive(true);
+    }
+    if (command.action === 'duel_stop_b') {
+      sound.playPick('ban');
+      const finalMs =
+        typeof command.exactMs === 'number' && command.exactMs > 0
+          ? Math.round(command.exactMs)
+          : Math.max(10, Math.round(performance.now() - teamBStartRef.current));
+      setTeamBActive(false);
+      setTeamBMs(finalMs);
+      setTeamBFinished(true);
+    }
+    if (command.action === 'duel_reset_b') {
+      sound.playTick();
+      setTeamBActive(false);
+      setTeamBFinished(false);
+      setTeamBMs(0);
+    }
     if (command.action === 'duel_toggle_a') {
       duelStateRef.current.handleToggleTeamA();
     }
     if (command.action === 'duel_toggle_b') {
       duelStateRef.current.handleToggleTeamB();
     }
-  }), [countdownInitial]);
+  }), [countdownInitial, teamAActive, teamAMs, teamBActive, teamBMs]);
 
   useLayoutEffect(() => revealWithGsap(containerRef.current, '.timer-countdown-card, .timer-duel-card', {
     y: 30,
@@ -215,17 +303,21 @@ export const DualTimer: React.FC<DualTimerProps> = ({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Team Stopwatch Handlers (Tap to start / Tap to finish)
+  // Team Stopwatch Handlers (1st Tap = Start, 2nd Tap = Stop & Lock until Reset)
   const handleToggleTeamA = () => {
     if (teamAActive) {
+      const exactMs = Math.max(10, Math.round(performance.now() - teamAStartRef.current));
       sound.playPick('ban');
+      setTeamAMs(exactMs);
       setTeamAActive(false);
       setTeamAFinished(true);
+    } else if (teamAFinished) {
+      // Locked after 2nd tap to protect result against accidental 3rd touch
+      return;
     } else {
       sound.playPick('pick');
-      if (teamAFinished) {
-        setTeamAMs(0);
-      }
+      teamAStartRef.current = performance.now();
+      setTeamAMs(0);
       setTeamAFinished(false);
       setTeamAActive(true);
     }
@@ -241,14 +333,18 @@ export const DualTimer: React.FC<DualTimerProps> = ({
 
   const handleToggleTeamB = () => {
     if (teamBActive) {
+      const exactMs = Math.max(10, Math.round(performance.now() - teamBStartRef.current));
       sound.playPick('ban');
+      setTeamBMs(exactMs);
       setTeamBActive(false);
       setTeamBFinished(true);
+    } else if (teamBFinished) {
+      // Locked after 2nd tap to protect result against accidental 3rd touch
+      return;
     } else {
       sound.playPick('pick');
-      if (teamBFinished) {
-        setTeamBMs(0);
-      }
+      teamBStartRef.current = performance.now();
+      setTeamBMs(0);
       setTeamBFinished(false);
       setTeamBActive(true);
     }
@@ -265,6 +361,8 @@ export const DualTimer: React.FC<DualTimerProps> = ({
   // Start Both Teams Simultaneously (انطلاق الفريقين معاً بنفس اللحظة)
   const startBothSimultaneously = () => {
     sound.playPick('pick');
+    teamAStartRef.current = performance.now();
+    teamBStartRef.current = performance.now();
     setTeamAMs(0);
     setTeamBMs(0);
     setTeamAFinished(false);
@@ -836,7 +934,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
                         👑 الأقرب للهدف!
                       </span>
                     )}
-                    <span className="text-[10px] text-slate-400 mt-2">انقر للإعادة</span>
+                    <span className="text-[10px] text-amber-300/90 font-bold mt-2">🔒 النتيجة مقفلة (اضغط إعادة بالأعلى)</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center group-hover:scale-105 transition-transform">
@@ -930,7 +1028,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
                         👑 الأقرب للهدف!
                       </span>
                     )}
-                    <span className="text-[10px] text-slate-400 mt-2">انقر للإعادة</span>
+                    <span className="text-[10px] text-amber-300/90 font-bold mt-2">🔒 النتيجة مقفلة (اضغط إعادة بالأعلى)</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center group-hover:scale-105 transition-transform">
@@ -1352,7 +1450,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
                           👑 الأقرب للهدف!
                         </span>
                       )}
-                      <span className="text-xs text-slate-400 mt-3">انقر للإعادة</span>
+                      <span className="text-xs text-amber-300/90 font-bold mt-3">🔒 النتيجة مقفلة (اضغط إعادة بالأعلى)</span>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-center group-hover:scale-105 transition-transform">
@@ -1445,7 +1543,7 @@ export const DualTimer: React.FC<DualTimerProps> = ({
                           👑 الأقرب للهدف!
                         </span>
                       )}
-                      <span className="text-xs text-slate-400 mt-3">انقر للإعادة</span>
+                      <span className="text-xs text-amber-300/90 font-bold mt-3">🔒 النتيجة مقفلة (اضغط إعادة بالأعلى)</span>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-center group-hover:scale-105 transition-transform">

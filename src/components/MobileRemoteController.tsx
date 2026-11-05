@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Team,
   CurrentMatch,
@@ -14,6 +14,7 @@ import { GameIcon } from './GameIcons';
 import { sound } from '../utils/audio';
 import {
   broadcastMessage,
+  subscribeToBroadcast,
   DEFAULT_ARENA_COLUMN_GAMES,
   saveArenaColumnGames,
   subscribeToConnectionStatus,
@@ -61,6 +62,7 @@ import {
   ArrowLeftRight,
   Radio,
   Target,
+  Lock,
 } from 'lucide-react';
 
 interface MobileRemoteControllerProps {
@@ -144,6 +146,103 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
   const [targetSeconds, setTargetSeconds] = useState<number>(10);
   const [isBlindMode, setIsBlindMode] = useState<boolean>(true);
   const [fullScreenBuzzer, setFullScreenBuzzer] = useState<'none' | 'A' | 'B' | 'dual'>('none');
+
+  // High-precision 2-Tap Stopwatch states on Phone (Tap 1 = Start, Tap 2 = Stop & Lock)
+  const [duelPhaseA, setDuelPhaseA] = useState<'idle' | 'running' | 'finished'>('idle');
+  const [duelPhaseB, setDuelPhaseB] = useState<'idle' | 'running' | 'finished'>('idle');
+  const [duelMsA, setDuelMsA] = useState<number>(0);
+  const [duelMsB, setDuelMsB] = useState<number>(0);
+
+  const duelPhaseARef = useRef<'idle' | 'running' | 'finished'>('idle');
+  const duelPhaseBRef = useRef<'idle' | 'running' | 'finished'>('idle');
+  const perfStartARef = useRef<number>(0);
+  const perfStartBRef = useRef<number>(0);
+  const lastTapGuardARef = useRef<number>(0);
+  const lastTapGuardBRef = useRef<number>(0);
+
+  // Keep refs synced with state
+  duelPhaseARef.current = duelPhaseA;
+  duelPhaseBRef.current = duelPhaseB;
+
+  // 60fps requestAnimationFrame loop on phone while either team stopwatch is running
+  useEffect(() => {
+    let rafId: number | null = null;
+    if (duelPhaseA === 'running' || duelPhaseB === 'running') {
+      const tick = () => {
+        const now = performance.now();
+        if (duelPhaseARef.current === 'running') {
+          setDuelMsA(Math.max(0, Math.round(now - perfStartARef.current)));
+        }
+        if (duelPhaseBRef.current === 'running') {
+          setDuelMsB(Math.max(0, Math.round(now - perfStartBRef.current)));
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    }
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [duelPhaseA, duelPhaseB]);
+
+  // Listen to DUEL_STATE_SYNC and TIMER_COMMAND so phone stays 100% synced with computer actions
+  useEffect(() => {
+    return subscribeToBroadcast((type, payload) => {
+      if (type === 'DUEL_STATE_SYNC' && payload && typeof payload === 'object') {
+        const sync = payload as {
+          targetSeconds?: number;
+          isBlindChallenge?: boolean;
+          teamAActive?: boolean;
+          teamAFinished?: boolean;
+          teamAMs?: number;
+          teamBActive?: boolean;
+          teamBFinished?: boolean;
+          teamBMs?: number;
+        };
+        if (typeof sync.targetSeconds === 'number') {
+          setTargetSeconds(sync.targetSeconds);
+        }
+        if (typeof sync.isBlindChallenge === 'boolean') {
+          setIsBlindMode(sync.isBlindChallenge);
+        }
+        // Sync Team A phase if triggered from computer
+        if (sync.teamAActive && duelPhaseARef.current !== 'running') {
+          perfStartARef.current = performance.now();
+          duelPhaseARef.current = 'running';
+          setDuelMsA(0);
+          setDuelPhaseA('running');
+        } else if (sync.teamAFinished && duelPhaseARef.current !== 'finished') {
+          duelPhaseARef.current = 'finished';
+          if (typeof sync.teamAMs === 'number' && sync.teamAMs > 0) {
+            setDuelMsA(sync.teamAMs);
+          }
+          setDuelPhaseA('finished');
+        } else if (!sync.teamAActive && !sync.teamAFinished && duelPhaseARef.current !== 'idle') {
+          duelPhaseARef.current = 'idle';
+          setDuelMsA(0);
+          setDuelPhaseA('idle');
+        }
+
+        // Sync Team B phase if triggered from computer
+        if (sync.teamBActive && duelPhaseBRef.current !== 'running') {
+          perfStartBRef.current = performance.now();
+          duelPhaseBRef.current = 'running';
+          setDuelMsB(0);
+          setDuelPhaseB('running');
+        } else if (sync.teamBFinished && duelPhaseBRef.current !== 'finished') {
+          duelPhaseBRef.current = 'finished';
+          if (typeof sync.teamBMs === 'number' && sync.teamBMs > 0) {
+            setDuelMsB(sync.teamBMs);
+          }
+          setDuelPhaseB('finished');
+        } else if (!sync.teamBActive && !sync.teamBFinished && duelPhaseBRef.current !== 'idle') {
+          duelPhaseBRef.current = 'idle';
+          setDuelMsB(0);
+          setDuelPhaseB('idle');
+        }
+      }
+    });
+  }, []);
 
   // League & Team management states
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
@@ -322,56 +421,184 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
     showFeedback('⇄ تم تبديل طرفي الفريقين على الشاشة');
   };
 
-  const handleStopBuzzerP1 = () => {
-    triggerHaptic(50);
-    sound.playPick('ban');
-    broadcastMessage('STOP_TIMER_P1', { timestamp: Date.now() });
-    showFeedback(`🛑 تم إيقاف عداد ${teamA.shortName}!`);
+  // Instantaneous 2-Tap Buzzer Handler for Team A (1st Tap = Start, 2nd Tap = Stop & Lock)
+  const handleBuzzerTapP1 = (e?: React.PointerEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const now = performance.now();
+    if (now - lastTapGuardARef.current < 80) return;
+    lastTapGuardARef.current = now;
+
+    const currentPhase = duelPhaseARef.current;
+
+    if (currentPhase === 'idle') {
+      // 1ST TAP: Instant Start
+      perfStartARef.current = now;
+      duelPhaseARef.current = 'running';
+      setDuelMsA(0);
+      setDuelPhaseA('running');
+      triggerHaptic(30);
+      sound.playPick('pick');
+      broadcastMessage('SWITCH_TAB_COMMAND', 'timer');
+      broadcastMessage('TIMER_COMMAND', { action: 'duel_start_a' });
+    } else if (currentPhase === 'running') {
+      // 2ND TAP: Instant Stop & Sub-Millisecond Precision Lock
+      const exactMs = Math.max(10, Math.round(now - perfStartARef.current));
+      duelPhaseARef.current = 'finished';
+      setDuelMsA(exactMs);
+      setDuelPhaseA('finished');
+      triggerHaptic([40, 30, 60]);
+      sound.playPick('ban');
+      broadcastMessage('TIMER_COMMAND', { action: 'duel_stop_a', exactMs });
+      showFeedback(`🛑 ${teamA.shortName}: ${(exactMs / 1000).toFixed(2)}s (تم القفل 🔒)`);
+    } else {
+      // 3RD+ TAP: Locked to protect result!
+      triggerHaptic(15);
+      showFeedback(`🔒 نتيجة ${teamA.shortName} مثبتة — اضغط تصفير لإعادة المحاولة`);
+    }
   };
 
-  const handleStopBuzzerP2 = () => {
-    triggerHaptic(50);
-    sound.playPick('ban');
-    broadcastMessage('STOP_TIMER_P2', { timestamp: Date.now() });
-    showFeedback(`🛑 تم إيقاف عداد ${teamB.shortName}!`);
+  // Instantaneous 2-Tap Buzzer Handler for Team B (1st Tap = Start, 2nd Tap = Stop & Lock)
+  const handleBuzzerTapP2 = (e?: React.PointerEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const now = performance.now();
+    if (now - lastTapGuardBRef.current < 80) return;
+    lastTapGuardBRef.current = now;
+
+    const currentPhase = duelPhaseBRef.current;
+
+    if (currentPhase === 'idle') {
+      // 1ST TAP: Instant Start
+      perfStartBRef.current = now;
+      duelPhaseBRef.current = 'running';
+      setDuelMsB(0);
+      setDuelPhaseB('running');
+      triggerHaptic(30);
+      sound.playPick('pick');
+      broadcastMessage('SWITCH_TAB_COMMAND', 'timer');
+      broadcastMessage('TIMER_COMMAND', { action: 'duel_start_b' });
+    } else if (currentPhase === 'running') {
+      // 2ND TAP: Instant Stop & Sub-Millisecond Precision Lock
+      const exactMs = Math.max(10, Math.round(now - perfStartBRef.current));
+      duelPhaseBRef.current = 'finished';
+      setDuelMsB(exactMs);
+      setDuelPhaseB('finished');
+      triggerHaptic([40, 30, 60]);
+      sound.playPick('ban');
+      broadcastMessage('TIMER_COMMAND', { action: 'duel_stop_b', exactMs });
+      showFeedback(`🛑 ${teamB.shortName}: ${(exactMs / 1000).toFixed(2)}s (تم القفل 🔒)`);
+    } else {
+      // 3RD+ TAP: Locked to protect result!
+      triggerHaptic(15);
+      showFeedback(`🔒 نتيجة ${teamB.shortName} مثبتة — اضغط تصفير لإعادة المحاولة`);
+    }
   };
 
-  // FULL-SCREEN BUZZER MODE FOR PLAYERS (Touch anywhere with hand or head)
+  const handleStartBothFromPhone = () => {
+    const now = performance.now();
+    perfStartARef.current = now;
+    perfStartBRef.current = now;
+    duelPhaseARef.current = 'running';
+    duelPhaseBRef.current = 'running';
+    setDuelMsA(0);
+    setDuelMsB(0);
+    setDuelPhaseA('running');
+    setDuelPhaseB('running');
+    triggerHaptic(40);
+    sound.playPick('pick');
+    broadcastMessage('SWITCH_TAB_COMMAND', 'timer');
+    broadcastMessage('TIMER_COMMAND', { action: 'duel_start_both' });
+    showFeedback('⚡ انطلق العداد للفريقين معاً! الضغطة القادمة لكل فريق ستوقف عداده');
+  };
+
+  const handleResetBothFromPhone = () => {
+    duelPhaseARef.current = 'idle';
+    duelPhaseBRef.current = 'idle';
+    setDuelMsA(0);
+    setDuelMsB(0);
+    setDuelPhaseA('idle');
+    setDuelPhaseB('idle');
+    triggerHaptic(25);
+    sound.playTick();
+    broadcastMessage('TIMER_COMMAND', { action: 'duel_reset_both' });
+    showFeedback('✓ تم تصفير العدادين وفك القفل');
+  };
+
+  const handleResetSingleTeamFromPhone = (team: 'A' | 'B', e?: React.MouseEvent | React.PointerEvent) => {
+    if (e) e.stopPropagation();
+    triggerHaptic(20);
+    sound.playTick();
+    if (team === 'A') {
+      duelPhaseARef.current = 'idle';
+      setDuelMsA(0);
+      setDuelPhaseA('idle');
+      broadcastMessage('TIMER_COMMAND', { action: 'duel_reset_a' });
+    } else {
+      duelPhaseBRef.current = 'idle';
+      setDuelMsB(0);
+      setDuelPhaseB('idle');
+      broadcastMessage('TIMER_COMMAND', { action: 'duel_reset_b' });
+    }
+  };
+
+  const secsA = duelMsA / 1000;
+  const secsB = duelMsB / 1000;
+  const diffA = secsA - targetSeconds;
+  const diffB = secsB - targetSeconds;
+  const bothFinishedOnPhone = duelPhaseA === 'finished' && duelPhaseB === 'finished';
+  const winnerOnPhone =
+    bothFinishedOnPhone
+      ? Math.abs(diffA) < Math.abs(diffB)
+        ? 'A'
+        : Math.abs(diffB) < Math.abs(diffA)
+        ? 'B'
+        : 'draw'
+      : null;
+
+  // FULL-SCREEN BUZZER MODE FOR PLAYERS (Touch anywhere with hand or head: 1st Tap = Start, 2nd Tap = Stop & Lock)
   if (fullScreenBuzzer !== 'none') {
     return (
-      <div className="fixed inset-0 z-[100] bg-[#05070F] flex flex-col select-none overflow-hidden font-cairo">
-        {/* Top Exit Bar */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800">
+      <div className="fixed inset-0 z-[100] bg-[#05070F] flex flex-col select-none overflow-hidden font-cairo touch-manipulation">
+        {/* Top Control Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-950 border-b border-slate-800">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold font-changa text-white">
-              وضع البازر الكامل (تحدي وقف المؤقت)
+              تحدي الـ {targetSeconds}ث
             </span>
-          </div>
-          <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                triggerHaptic(25);
-                broadcastMessage('SWITCH_TAB_COMMAND', 'timer');
-                broadcastMessage('TIMER_COMMAND', { action: 'duel_start_both' });
-                showFeedback('⚡ انطلق العداد للفريقين معاً!');
+                triggerHaptic(20);
+                const next = !isBlindMode;
+                setIsBlindMode(next);
+                broadcastMessage('TIMER_COMMAND', { action: 'set_blind', blind: next });
               }}
-              className="px-3 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs"
+              className={`px-2 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1 ${
+                isBlindMode
+                  ? 'bg-purple-950/80 border-purple-500/60 text-purple-200'
+                  : 'bg-slate-900 border-slate-700 text-cyan-300'
+              }`}
+            >
+              {isBlindMode ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              <span>{isBlindMode ? 'أعمى 🙈' : 'ظاهر 👁️'}</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleStartBothFromPhone}
+              className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs active:scale-95"
             >
               ⚡ انطلاق الاثنين
             </button>
             <button
-              onClick={() => {
-                triggerHaptic(20);
-                broadcastMessage('TIMER_COMMAND', { action: 'duel_reset_both' });
-                showFeedback('تم تصفير العدادين');
-              }}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 font-bold text-xs"
+              onClick={handleResetBothFromPhone}
+              className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 font-bold text-xs flex items-center gap-1 active:scale-95"
             >
-              تصفير
+              <RotateCcw className="w-3 h-3" />
+              <span>تصفير</span>
             </button>
             <button
               onClick={() => setFullScreenBuzzer('none')}
-              className="px-3 py-1 rounded-lg bg-rose-900 text-white font-bold text-xs flex items-center gap-1"
+              className="px-2.5 py-1 rounded-lg bg-rose-900 text-white font-bold text-xs flex items-center gap-1 active:scale-95"
             >
               <X className="w-3.5 h-3.5" />
               <span>إغلاق</span>
@@ -379,67 +606,365 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
           </div>
         </div>
 
-        {/* Full-Screen Single Player or Dual Split Buzzer */}
+        {/* Toast inside fullscreen buzzer */}
+        {remoteFeedback && (
+          <div className="bg-amber-500 text-slate-950 text-center py-1 px-3 text-xs font-black font-changa">
+            {remoteFeedback}
+          </div>
+        )}
+
+        {/* Full-Screen Single Player A */}
         {fullScreenBuzzer === 'A' && (
-          <button
-            onPointerDown={handleStopBuzzerP1}
-            className="flex-1 w-full bg-[#B91C1C] active:bg-[#EF4444] text-white flex flex-col items-center justify-center p-6 transition-colors border-8 border-rose-400/60"
+          <div
+            onPointerDown={handleBuzzerTapP1}
+            role="button"
+            tabIndex={0}
+            className={`flex-1 w-full flex flex-col items-center justify-center p-6 transition-all border-8 relative cursor-pointer ${
+              duelPhaseA === 'running'
+                ? 'bg-[#991B1B] active:bg-[#DC2626] border-rose-400 animate-pulse'
+                : duelPhaseA === 'finished'
+                ? 'bg-slate-900 border-amber-400'
+                : 'bg-[#5B21B6] active:bg-[#7C3AED] border-purple-400/60'
+            }`}
           >
-            <div className="w-28 h-28 rounded-full bg-black/25 border-4 border-white/40 flex items-center justify-center mb-4">
-              <GameIcon name={teamA.logo || 'crown'} className="w-16 h-16 text-white" />
+            {duelPhaseA === 'finished' && (
+              <button
+                onPointerDown={(e) => handleResetSingleTeamFromPhone('A', e)}
+                onClick={(e) => handleResetSingleTeamFromPhone('A', e)}
+                className="absolute top-4 left-4 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-600 text-white text-xs font-bold flex items-center gap-1.5 z-10"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>إعادة المحاولة</span>
+              </button>
+            )}
+
+            <div className="w-24 h-24 rounded-full bg-black/25 border-4 border-white/40 flex items-center justify-center mb-3">
+              <GameIcon name={teamA.logo || 'crown'} className="w-14 h-14 text-white" />
             </div>
-            <span className="text-4xl sm:text-5xl font-black font-changa tracking-wide uppercase">
+            <span className="text-3xl sm:text-4xl font-black font-changa tracking-wide uppercase text-white">
               {teamA.name}
             </span>
-            <span className="mt-3 text-xl font-bold text-rose-100">
-              المس الشاشة في أي مكان لإيقاف المؤقت فوراً!
-            </span>
-            <span className="mt-2 text-xs font-mono text-white/80">
-              STOP TIMER P1 · INSTANT SYNC
-            </span>
-          </button>
+
+            {duelPhaseA === 'idle' && (
+              <>
+                <div className="mt-4 px-6 py-3 rounded-2xl bg-emerald-500 text-slate-950 font-black font-changa text-2xl flex items-center gap-2 shadow-xl">
+                  <Play className="w-6 h-6 fill-slate-950" />
+                  <span>الضغطة 1: ابدأ المؤقت</span>
+                </div>
+                <span className="mt-2 text-sm font-bold text-purple-200">
+                  الهدف: {targetSeconds}.00 ثانية
+                </span>
+              </>
+            )}
+
+            {duelPhaseA === 'running' && (
+              <>
+                <div className="my-3">
+                  {isBlindMode ? (
+                    <div className="flex flex-col items-center">
+                      <span className="text-5xl mb-1">🙈</span>
+                      <span className="text-lg font-black font-changa text-rose-200">
+                        العداد يعمل (الوضع الأعمى)
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-orbitron font-black text-6xl text-white tabular-nums">
+                      {secsA.toFixed(2)}s
+                    </span>
+                  )}
+                </div>
+                <div className="px-6 py-3 rounded-2xl bg-white text-rose-900 font-black font-changa text-2xl shadow-xl">
+                  🛑 الضغطة 2: أوقف الآن!
+                </div>
+              </>
+            )}
+
+            {duelPhaseA === 'finished' && (
+              <>
+                <span className="font-orbitron font-black text-6xl text-amber-400 tabular-nums mt-3">
+                  {secsA.toFixed(2)}s
+                </span>
+                <span className="text-base font-mono font-bold text-slate-200 mt-1">
+                  الفارق عن {targetSeconds}ث: {diffA >= 0 ? '+' : ''}{diffA.toFixed(2)}s
+                </span>
+                <div className="mt-3 px-4 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 text-xs font-bold flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>تم قفل الزر لحماية النتيجة — اضغط تصفير للإعادة</span>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
+        {/* Full-Screen Single Player B */}
         {fullScreenBuzzer === 'B' && (
-          <button
-            onPointerDown={handleStopBuzzerP2}
-            className="flex-1 w-full bg-[#B91C1C] active:bg-[#EF4444] text-white flex flex-col items-center justify-center p-6 transition-colors border-8 border-rose-400/60"
+          <div
+            onPointerDown={handleBuzzerTapP2}
+            role="button"
+            tabIndex={0}
+            className={`flex-1 w-full flex flex-col items-center justify-center p-6 transition-all border-8 relative cursor-pointer ${
+              duelPhaseB === 'running'
+                ? 'bg-[#991B1B] active:bg-[#DC2626] border-rose-400 animate-pulse'
+                : duelPhaseB === 'finished'
+                ? 'bg-slate-900 border-amber-400'
+                : 'bg-[#0E7490] active:bg-[#0891B2] border-cyan-400/60'
+            }`}
           >
-            <div className="w-28 h-28 rounded-full bg-black/25 border-4 border-white/40 flex items-center justify-center mb-4">
-              <GameIcon name={teamB.logo || 'shield'} className="w-16 h-16 text-white" />
+            {duelPhaseB === 'finished' && (
+              <button
+                onPointerDown={(e) => handleResetSingleTeamFromPhone('B', e)}
+                onClick={(e) => handleResetSingleTeamFromPhone('B', e)}
+                className="absolute top-4 left-4 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-600 text-white text-xs font-bold flex items-center gap-1.5 z-10"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>إعادة المحاولة</span>
+              </button>
+            )}
+
+            <div className="w-24 h-24 rounded-full bg-black/25 border-4 border-white/40 flex items-center justify-center mb-3">
+              <GameIcon name={teamB.logo || 'shield'} className="w-14 h-14 text-white" />
             </div>
-            <span className="text-4xl sm:text-5xl font-black font-changa tracking-wide uppercase">
+            <span className="text-3xl sm:text-4xl font-black font-changa tracking-wide uppercase text-white">
               {teamB.name}
             </span>
-            <span className="mt-3 text-xl font-bold text-rose-100">
-              المس الشاشة في أي مكان لإيقاف المؤقت فوراً!
-            </span>
-            <span className="mt-2 text-xs font-mono text-white/80">
-              STOP TIMER P2 · INSTANT SYNC
-            </span>
-          </button>
+
+            {duelPhaseB === 'idle' && (
+              <>
+                <div className="mt-4 px-6 py-3 rounded-2xl bg-emerald-500 text-slate-950 font-black font-changa text-2xl flex items-center gap-2 shadow-xl">
+                  <Play className="w-6 h-6 fill-slate-950" />
+                  <span>الضغطة 1: ابدأ المؤقت</span>
+                </div>
+                <span className="mt-2 text-sm font-bold text-cyan-200">
+                  الهدف: {targetSeconds}.00 ثانية
+                </span>
+              </>
+            )}
+
+            {duelPhaseB === 'running' && (
+              <>
+                <div className="my-3">
+                  {isBlindMode ? (
+                    <div className="flex flex-col items-center">
+                      <span className="text-5xl mb-1">🙈</span>
+                      <span className="text-lg font-black font-changa text-rose-200">
+                        العداد يعمل (الوضع الأعمى)
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-orbitron font-black text-6xl text-white tabular-nums">
+                      {secsB.toFixed(2)}s
+                    </span>
+                  )}
+                </div>
+                <div className="px-6 py-3 rounded-2xl bg-white text-rose-900 font-black font-changa text-2xl shadow-xl">
+                  🛑 الضغطة 2: أوقف الآن!
+                </div>
+              </>
+            )}
+
+            {duelPhaseB === 'finished' && (
+              <>
+                <span className="font-orbitron font-black text-6xl text-amber-400 tabular-nums mt-3">
+                  {secsB.toFixed(2)}s
+                </span>
+                <span className="text-base font-mono font-bold text-slate-200 mt-1">
+                  الفارق عن {targetSeconds}ث: {diffB >= 0 ? '+' : ''}{diffB.toFixed(2)}s
+                </span>
+                <div className="mt-3 px-4 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 text-xs font-bold flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>تم قفل الزر لحماية النتيجة — اضغط تصفير للإعادة</span>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
+        {/* SPLIT-SCREEN DUAL BUZZER (شاشة مقسومة للفريقين: ضغطة 1 للبدء، ضغطة 2 للإيقاف والقفل) */}
         {fullScreenBuzzer === 'dual' && (
           <div className="flex-1 flex flex-col">
-            <button
-              onPointerDown={handleStopBuzzerP1}
-              className="flex-1 w-full bg-[#6D28D9] active:bg-[#8B5CF6] text-white flex flex-col items-center justify-center p-4 border-b-4 border-slate-950"
+            {/* TEAM A HALF */}
+            <div
+              onPointerDown={handleBuzzerTapP1}
+              role="button"
+              tabIndex={0}
+              className={`flex-1 w-full flex flex-col items-center justify-center p-4 border-b-4 border-slate-950 relative transition-all cursor-pointer ${
+                duelPhaseA === 'running'
+                  ? 'bg-[#B91C1C] active:bg-[#EF4444]'
+                  : duelPhaseA === 'finished'
+                  ? winnerOnPhone === 'A'
+                    ? 'bg-[#3B0764] ring-4 ring-inset ring-amber-400'
+                    : 'bg-slate-900/95'
+                  : 'bg-[#5B21B6] active:bg-[#7C3AED]'
+              }`}
             >
-              <span className="text-3xl font-black font-changa">{teamA.name}</span>
-              <span className="text-sm font-bold text-purple-200 mt-1">
-                اضغط لإيقاف مؤقت {teamA.shortName}
-              </span>
-            </button>
-            <button
-              onPointerDown={handleStopBuzzerP2}
-              className="flex-1 w-full bg-[#0E7490] active:bg-[#06B6D4] text-white flex flex-col items-center justify-center p-4"
+              {duelPhaseA === 'finished' && (
+                <button
+                  onPointerDown={(e) => handleResetSingleTeamFromPhone('A', e)}
+                  onClick={(e) => handleResetSingleTeamFromPhone('A', e)}
+                  className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-600 text-slate-200 text-[11px] font-bold flex items-center gap-1 z-10"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>إعادة</span>
+                </button>
+              )}
+
+              <div className="flex items-center gap-2 mb-1">
+                <GameIcon name={teamA.logo || 'crown'} className="w-7 h-7 text-white" />
+                <span className="text-2xl sm:text-3xl font-black font-changa text-white">
+                  {teamA.name}
+                </span>
+              </div>
+
+              {duelPhaseA === 'idle' && (
+                <>
+                  <div className="mt-2 px-5 py-2.5 rounded-2xl bg-emerald-400 text-slate-950 font-black font-changa text-lg sm:text-xl flex items-center gap-2 shadow-lg">
+                    <Play className="w-5 h-5 fill-slate-950" />
+                    <span>الضغطة 1: ابدأ المؤقت</span>
+                  </div>
+                  <span className="text-xs font-bold text-purple-200 mt-1.5">
+                    الهدف: {targetSeconds}.00 ثانية
+                  </span>
+                </>
+              )}
+
+              {duelPhaseA === 'running' && (
+                <>
+                  <div className="my-1.5">
+                    {isBlindMode ? (
+                      <div className="flex items-center gap-2 bg-black/30 px-3.5 py-1.5 rounded-xl border border-rose-300/30">
+                        <span className="text-2xl">🙈</span>
+                        <span className="text-sm font-black font-changa text-rose-100">
+                          العداد يعمل.. خمّن الـ {targetSeconds}ث!
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="font-orbitron font-black text-4xl sm:text-5xl text-white tabular-nums">
+                        {secsA.toFixed(2)}s
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 px-5 py-2 rounded-2xl bg-white text-rose-900 font-black font-changa text-lg sm:text-xl shadow-lg animate-pulse">
+                    🛑 الضغطة 2: أوقف الآن!
+                  </div>
+                </>
+              )}
+
+              {duelPhaseA === 'finished' && (
+                <>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="font-orbitron font-black text-4xl sm:text-5xl text-amber-400 tabular-nums">
+                      {secsA.toFixed(2)}s
+                    </span>
+                    <span className="text-xs font-mono font-bold text-purple-200 bg-black/40 px-2 py-0.5 rounded-lg">
+                      الفارق: {diffA >= 0 ? '+' : ''}{diffA.toFixed(2)}ث
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    {winnerOnPhone === 'A' && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black font-changa text-xs">
+                        👑 الأقرب للهدف!
+                      </span>
+                    )}
+                    <span className="px-2.5 py-1 rounded-xl bg-slate-800/90 border border-slate-700 text-amber-300 text-[11px] font-bold flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      <span>النتيجة مقفلة لحمايتها</span>
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* TEAM B HALF */}
+            <div
+              onPointerDown={handleBuzzerTapP2}
+              role="button"
+              tabIndex={0}
+              className={`flex-1 w-full flex flex-col items-center justify-center p-4 relative transition-all cursor-pointer ${
+                duelPhaseB === 'running'
+                  ? 'bg-[#B91C1C] active:bg-[#EF4444]'
+                  : duelPhaseB === 'finished'
+                  ? winnerOnPhone === 'B'
+                    ? 'bg-[#083344] ring-4 ring-inset ring-amber-400'
+                    : 'bg-slate-900/95'
+                  : 'bg-[#0E7490] active:bg-[#0891B2]'
+              }`}
             >
-              <span className="text-3xl font-black font-changa">{teamB.name}</span>
-              <span className="text-sm font-bold text-cyan-200 mt-1">
-                اضغط لإيقاف مؤقت {teamB.shortName}
-              </span>
-            </button>
+              {duelPhaseB === 'finished' && (
+                <button
+                  onPointerDown={(e) => handleResetSingleTeamFromPhone('B', e)}
+                  onClick={(e) => handleResetSingleTeamFromPhone('B', e)}
+                  className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-600 text-slate-200 text-[11px] font-bold flex items-center gap-1 z-10"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>إعادة</span>
+                </button>
+              )}
+
+              <div className="flex items-center gap-2 mb-1">
+                <GameIcon name={teamB.logo || 'shield'} className="w-7 h-7 text-white" />
+                <span className="text-2xl sm:text-3xl font-black font-changa text-white">
+                  {teamB.name}
+                </span>
+              </div>
+
+              {duelPhaseB === 'idle' && (
+                <>
+                  <div className="mt-2 px-5 py-2.5 rounded-2xl bg-emerald-400 text-slate-950 font-black font-changa text-lg sm:text-xl flex items-center gap-2 shadow-lg">
+                    <Play className="w-5 h-5 fill-slate-950" />
+                    <span>الضغطة 1: ابدأ المؤقت</span>
+                  </div>
+                  <span className="text-xs font-bold text-cyan-200 mt-1.5">
+                    الهدف: {targetSeconds}.00 ثانية
+                  </span>
+                </>
+              )}
+
+              {duelPhaseB === 'running' && (
+                <>
+                  <div className="my-1.5">
+                    {isBlindMode ? (
+                      <div className="flex items-center gap-2 bg-black/30 px-3.5 py-1.5 rounded-xl border border-rose-300/30">
+                        <span className="text-2xl">🙈</span>
+                        <span className="text-sm font-black font-changa text-rose-100">
+                          العداد يعمل.. خمّن الـ {targetSeconds}ث!
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="font-orbitron font-black text-4xl sm:text-5xl text-white tabular-nums">
+                        {secsB.toFixed(2)}s
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 px-5 py-2 rounded-2xl bg-white text-rose-900 font-black font-changa text-lg sm:text-xl shadow-lg animate-pulse">
+                    🛑 الضغطة 2: أوقف الآن!
+                  </div>
+                </>
+              )}
+
+              {duelPhaseB === 'finished' && (
+                <>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="font-orbitron font-black text-4xl sm:text-5xl text-amber-400 tabular-nums">
+                      {secsB.toFixed(2)}s
+                    </span>
+                    <span className="text-xs font-mono font-bold text-cyan-200 bg-black/40 px-2 py-0.5 rounded-lg">
+                      الفارق: {diffB >= 0 ? '+' : ''}{diffB.toFixed(2)}ث
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    {winnerOnPhone === 'B' && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black font-changa text-xs">
+                        👑 الأقرب للهدف!
+                      </span>
+                    )}
+                    <span className="px-2.5 py-1 rounded-xl bg-slate-800/90 border border-slate-700 text-amber-300 text-[11px] font-bold flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      <span>النتيجة مقفلة لحمايتها</span>
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1616,13 +2141,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
             {/* Start Both Simultaneously & Reset Both */}
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => {
-                  triggerHaptic(45);
-                  sound.playPick('pick');
-                  broadcastMessage('SWITCH_TAB_COMMAND', 'timer');
-                  broadcastMessage('TIMER_COMMAND', { action: 'duel_start_both' });
-                  showFeedback('⚡ انطلق عداد الفريقين معاً!');
-                }}
+                onClick={handleStartBothFromPhone}
                 className="py-3 px-3 rounded-2xl bg-amber-500 text-slate-950 font-black font-changa text-xs flex items-center justify-center gap-1.5 active:scale-95"
               >
                 <Zap className="w-4 h-4" />
@@ -1630,47 +2149,108 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               </button>
 
               <button
-                onClick={() => {
-                  triggerHaptic(25);
-                  sound.playTick();
-                  broadcastMessage('TIMER_COMMAND', { action: 'duel_reset_both' });
-                  showFeedback('تم تصفير عدادي الفريقين');
-                }}
+                onClick={handleResetBothFromPhone}
                 className="py-3 px-3 rounded-2xl bg-slate-900 border border-slate-700 text-slate-200 font-bold font-changa text-xs flex items-center justify-center gap-1.5 active:scale-95"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>تصفير</span>
+                <span>تصفير وفك القفل</span>
               </button>
             </div>
 
-            {/* Two Giant Team Buzzers */}
+            {/* Two Giant Team Buzzers (2-Tap: 1st Tap Starts, 2nd Tap Stops & Locks) */}
             <div className="grid grid-cols-2 gap-3 pt-1">
               <button
-                onPointerDown={handleStopBuzzerP1}
-                className="min-h-[132px] p-4 rounded-3xl border-2 border-purple-400 bg-purple-700 active:bg-purple-500 text-white flex flex-col items-center justify-center gap-2 transition-colors"
-                style={{ backgroundColor: teamA.color || '#7E22CE' }}
+                onPointerDown={handleBuzzerTapP1}
+                className={`min-h-[144px] p-3.5 rounded-3xl border-2 text-white flex flex-col items-center justify-center gap-1.5 transition-all touch-manipulation ${
+                  duelPhaseA === 'running'
+                    ? 'bg-rose-700 border-rose-300 animate-pulse'
+                    : duelPhaseA === 'finished'
+                    ? 'bg-slate-900 border-amber-400'
+                    : 'border-purple-400 active:scale-95'
+                }`}
+                style={
+                  duelPhaseA === 'idle'
+                    ? { backgroundColor: teamA.color || '#7E22CE' }
+                    : undefined
+                }
               >
-                <GameIcon name={teamA.logo || 'crown'} className="w-8 h-8 text-white" />
-                <span className="font-changa font-black text-base uppercase text-center leading-tight">
+                <GameIcon name={teamA.logo || 'crown'} className="w-7 h-7 text-white" />
+                <span className="font-changa font-black text-sm uppercase text-center leading-tight">
                   {teamA.name}
                 </span>
-                <span className="text-[11px] font-bold bg-black/30 px-2.5 py-0.5 rounded-lg">
-                  🛑 إيقاف المؤقت فوراً
-                </span>
+                {duelPhaseA === 'idle' && (
+                  <span className="text-[11px] font-black bg-emerald-400 text-slate-950 px-2.5 py-1 rounded-xl">
+                    ▶ ضغطة 1: ابدأ
+                  </span>
+                )}
+                {duelPhaseA === 'running' && (
+                  <>
+                    <span className="font-orbitron font-black text-sm text-rose-100 tabular-nums">
+                      {isBlindMode ? '🙈 مخفي' : `${secsA.toFixed(2)}s`}
+                    </span>
+                    <span className="text-[11px] font-black bg-white text-rose-900 px-2.5 py-1 rounded-xl">
+                      🛑 ضغطة 2: إيقاف!
+                    </span>
+                  </>
+                )}
+                {duelPhaseA === 'finished' && (
+                  <>
+                    <span className="font-orbitron font-black text-lg text-amber-400 tabular-nums">
+                      {secsA.toFixed(2)}s
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-200 flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      <span>مقفل ({diffA >= 0 ? '+' : ''}{diffA.toFixed(2)}ث)</span>
+                    </span>
+                  </>
+                )}
               </button>
 
               <button
-                onPointerDown={handleStopBuzzerP2}
-                className="min-h-[132px] p-4 rounded-3xl border-2 border-cyan-300 bg-cyan-700 active:bg-cyan-500 text-white flex flex-col items-center justify-center gap-2 transition-colors"
-                style={{ backgroundColor: teamB.color || '#0891B2' }}
+                onPointerDown={handleBuzzerTapP2}
+                className={`min-h-[144px] p-3.5 rounded-3xl border-2 text-white flex flex-col items-center justify-center gap-1.5 transition-all touch-manipulation ${
+                  duelPhaseB === 'running'
+                    ? 'bg-rose-700 border-rose-300 animate-pulse'
+                    : duelPhaseB === 'finished'
+                    ? 'bg-slate-900 border-amber-400'
+                    : 'border-cyan-300 active:scale-95'
+                }`}
+                style={
+                  duelPhaseB === 'idle'
+                    ? { backgroundColor: teamB.color || '#0891B2' }
+                    : undefined
+                }
               >
-                <GameIcon name={teamB.logo || 'shield'} className="w-8 h-8 text-white" />
-                <span className="font-changa font-black text-base uppercase text-center leading-tight">
+                <GameIcon name={teamB.logo || 'shield'} className="w-7 h-7 text-white" />
+                <span className="font-changa font-black text-sm uppercase text-center leading-tight">
                   {teamB.name}
                 </span>
-                <span className="text-[11px] font-bold bg-black/30 px-2.5 py-0.5 rounded-lg">
-                  🛑 إيقاف المؤقت فوراً
-                </span>
+                {duelPhaseB === 'idle' && (
+                  <span className="text-[11px] font-black bg-emerald-400 text-slate-950 px-2.5 py-1 rounded-xl">
+                    ▶ ضغطة 1: ابدأ
+                  </span>
+                )}
+                {duelPhaseB === 'running' && (
+                  <>
+                    <span className="font-orbitron font-black text-sm text-rose-100 tabular-nums">
+                      {isBlindMode ? '🙈 مخفي' : `${secsB.toFixed(2)}s`}
+                    </span>
+                    <span className="text-[11px] font-black bg-white text-rose-900 px-2.5 py-1 rounded-xl">
+                      🛑 ضغطة 2: إيقاف!
+                    </span>
+                  </>
+                )}
+                {duelPhaseB === 'finished' && (
+                  <>
+                    <span className="font-orbitron font-black text-lg text-amber-400 tabular-nums">
+                      {secsB.toFixed(2)}s
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-200 flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      <span>مقفل ({diffB >= 0 ? '+' : ''}{diffB.toFixed(2)}ث)</span>
+                    </span>
+                  </>
+                )}
               </button>
             </div>
 
