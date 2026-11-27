@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { Gamepad2, Trophy, UsersRound } from 'lucide-react';
 import {
@@ -84,6 +84,7 @@ export default function App() {
   // Check if opened as standalone window via URL hash #standalone-timer or #remote / /remote / ?mode=remote
   const [isStandaloneTimer, setIsStandaloneTimer] = useState<boolean>(false);
   const [introOpen, setIntroOpen] = useState(false);
+  const closeIntro = useCallback(() => setIntroOpen(false), []);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.pathname !== '/' && url.pathname !== '/index.html') return;
@@ -321,14 +322,25 @@ export default function App() {
 
   // Handle Score Updates (+ / -)
   const handleUpdateScore = (teamSlot: 'A' | 'B', delta: number) => {
-    const nextMatch = { ...currentMatch };
-    if (teamSlot === 'A') {
-      const nextScore = Math.max(0, Math.min(3, nextMatch.teamAScore + delta));
-      nextMatch.teamAScore = nextScore;
+    if (delta > 0 && Math.max(currentMatch.teamAScore, currentMatch.teamBScore) >= 3) return;
+    const nextMatch = { ...currentMatch, rounds: [...(currentMatch.rounds || [])] };
+    const scoreKey = teamSlot === 'A' ? 'teamAScore' : 'teamBScore';
+    const teamId = teamSlot === 'A' ? currentMatch.teamAId : currentMatch.teamBId;
+    const oldScore = nextMatch[scoreKey];
+    nextMatch[scoreKey] = Math.max(0, Math.min(3, oldScore + delta));
+    if (nextMatch[scoreKey] === oldScore) return;
+    const priorTotal = currentMatch.teamAScore + currentMatch.teamBScore;
+    const completeRoundHistory = nextMatch.rounds.length === priorTotal && nextMatch.rounds.every(r => r.winnerTeamId === currentMatch.teamAId || r.winnerTeamId === currentMatch.teamBId);
+    if (completeRoundHistory && delta === 1) {
+      nextMatch.rounds.push({round: priorTotal + 1, winnerTeamId:teamId, gameId: currentMatch.activeGameId || undefined, gameName: games.find(g=>g.id===currentMatch.activeGameId)?.nameAr});
+    } else if (completeRoundHistory && delta === -1) {
+      const last = nextMatch.rounds.map(r=>r.winnerTeamId).lastIndexOf(teamId);
+      if (last >= 0) nextMatch.rounds.splice(last,1);
+      nextMatch.rounds = nextMatch.rounds.map((r,i)=>({...r,round:i+1}));
     } else {
-      const nextScore = Math.max(0, Math.min(3, nextMatch.teamBScore + delta));
-      nextMatch.teamBScore = nextScore;
+      nextMatch.rounds = []; // never infer the chronological winners of an old aggregate score
     }
+    nextMatch.currentRound = Math.min(5,nextMatch.teamAScore + nextMatch.teamBScore + 1);
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
@@ -518,6 +530,8 @@ export default function App() {
       window.alert('لا يعتمد النهائي قبل وصول أحد الفريقين إلى ثلاث جولات.');
       return;
     }
+    if (currentMatch.teamAId === currentMatch.teamBId || !teams.some(t=>t.id===currentMatch.teamAId) || !teams.some(t=>t.id===currentMatch.teamBId)) return;
+    if (currentMatch.stage === 'final' && !window.confirm('اعتماد نتيجة النهائي وإعلان بطل صراع النخبة؟')) return;
     if (currentMatch.teamAScore === currentMatch.teamBScore) {
       return;
     }
@@ -554,6 +568,7 @@ export default function App() {
       loserId,
       weekNumber: leagueSettings.currentWeek,
       pointsAwarded: leagueSettings.pointsByWeek[leagueSettings.currentWeek] ?? 3,
+      rounds: [...(currentMatch.rounds || [])],
       categoryNames: selectedCategories.map(
         (cId) => CATEGORIES.find((c) => c.id === cId)?.nameAr || cId
       ),
@@ -564,7 +579,7 @@ export default function App() {
     saveMatchesHistory(updatedHistory);
 
     // Preserve the actual result before resetting the live scoreboard.
-    setVictoryMatch({ ...currentMatch, rounds: [...currentMatch.rounds] });
+    setVictoryMatch({ ...currentMatch, rounds: [...(currentMatch.rounds || [])] });
     setVictoryWinner(winnerObj);
     setVictoryLoser(loserObj);
     setIsVictoryModalOpen(true);
@@ -724,6 +739,15 @@ export default function App() {
     );
   }
 
+  const finalRecord = [...matchesHistory].filter(m=>m.stage==='final' && Math.max(m.teamAScore,m.teamBScore)===3 && m.teamAScore!==m.teamBScore).sort((a,b)=>b.timestamp-a.timestamp)[0];
+  const replayFinal = () => {
+    if (!finalRecord) return;
+    const winner=teams.find(t=>t.id===finalRecord.winnerId), loser=teams.find(t=>t.id===finalRecord.loserId);
+    if (!winner || !loser) return;
+    setVictoryWinner(winner);setVictoryLoser(loser);
+    setVictoryMatch({stage:'final',teamAId:finalRecord.teamAId,teamBId:finalRecord.teamBId,teamAScore:finalRecord.teamAScore,teamBScore:finalRecord.teamBScore,rounds:finalRecord.rounds||[],currentRound:5,activeGameId:null});
+    setIsVictoryModalOpen(true);
+  };
   const page = PAGE_COPY[activeTab];
   const today = new Date().toLocaleDateString('ar-JO', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -733,7 +757,7 @@ export default function App() {
         isScreenShaking ? 'animate-screen-shake' : ''
       }`}
     >
-      {introOpen && <CinematicIntro teams={teams} onClose={() => setIntroOpen(false)} />}
+      {introOpen && <CinematicIntro teams={teams} onClose={closeIntro} />}
       {/* Top Bar Navigation */}
       <Header
         activeTab={activeTab}
@@ -770,7 +794,7 @@ export default function App() {
             <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-lime"><Trophy /></span><small>مباريات مكتملة</small><strong><CountUpValue value={matchesHistory.length} padTo={2} /></strong><span>هذا الموسم</span></SpotlightCard>
             <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-blue"><UsersRound /></span><small>الفرق المتنافسة</small><strong><CountUpValue value={teams.length} padTo={2} /></strong><span>فريق مسجل</span></SpotlightCard>
             <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-orange"><Gamepad2 /></span><small>الألعاب المعتمدة</small><strong><CountUpValue value={games.length} padTo={2} /></strong><span>ضمن المكتبة</span></SpotlightCard>
-            <SpotlightCard className="overview-stat overview-stat-feature"><span className="overview-stat-kicker">الجولة الحالية</span><strong><CountUpValue value={currentMatch.teamAScore + currentMatch.teamBScore + 1} padTo={2} /> <small>/ 05</small></strong><span>أفضل خمس جولات</span></SpotlightCard>
+            <SpotlightCard className="overview-stat overview-stat-feature"><span className="overview-stat-kicker">الجولة الحالية</span><strong><CountUpValue value={Math.min(5,currentMatch.teamAScore + currentMatch.teamBScore + 1)} padTo={2} /> <small>/ 05</small></strong><span>أفضل خمس جولات</span></SpotlightCard>
           </div>
         )}
 
@@ -778,6 +802,7 @@ export default function App() {
         {/* TAB 1: LIVE MATCH */}
         {activeTab === 'match' && (
           <div className="page-section page-section-match space-y-8 animate-fade-in">
+            {finalRecord && <button type="button" onClick={replayFinal} className="w-full flex flex-wrap items-center justify-between gap-3 border border-amber-300/40 bg-gradient-to-l from-amber-950/70 to-[#0b110e] px-5 py-4 text-amber-100"><span className="flex items-center gap-3 font-changa font-bold"><Trophy className="h-6 w-6 text-amber-300"/>بطل صراع النخبة · {teams.find(t=>t.id===finalRecord.winnerId)?.name || (finalRecord.winnerId===finalRecord.teamAId?finalRecord.teamAName:finalRecord.teamBName)}</span><span className="text-xs">إعادة عرض التتويج</span></button>}
             {/* Live Scoreboard Banner */}
             <LiveScoreboard
               currentMatch={currentMatch}
@@ -987,10 +1012,7 @@ export default function App() {
           winnerTeam={victoryWinner}
           loserTeam={victoryLoser}
           currentMatch={victoryMatch}
-          onNextMatch={() => {
-            setIsVictoryModalOpen(false);
-            handleResetCurrentMatch();
-          }}
+          onNextMatch={() => setIsVictoryModalOpen(false)}
         />
       )}
 
