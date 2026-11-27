@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Team, CurrentMatch } from '../types';
 import { GameIcon } from './GameIcons';
+import { EliteTrophy } from './EliteTrophy';
 import { X, Camera } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sound } from '../utils/audio';
@@ -26,11 +27,11 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   onOpenRecapModal,
 }) => {
   const reducedMotion = useReducedMotion();
-  const [championship, setChampionship] = useState(false);
+  const [championship, setChampionship] = useState(currentMatch?.stage === 'final');
   useEffect(() => {
     if (!isOpen) return;
-    setChampionship(false);
-  }, [isOpen, winnerTeam.id]);
+    setChampionship(currentMatch?.stage === 'final');
+  }, [isOpen, winnerTeam.id, currentMatch?.stage]);
   useEffect(() => {
     if (!isOpen) return;
     sound.playChampionshipVictory();
@@ -49,7 +50,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   if (!isOpen) return null;
   const winnerScore = currentMatch ? (currentMatch.teamAId === winnerTeam.id ? currentMatch.teamAScore : currentMatch.teamBScore) : null;
   const loserScore = currentMatch ? (currentMatch.teamAId === loserTeam.id ? currentMatch.teamAScore : currentMatch.teamBScore) : null;
-  const canCrown = winnerScore !== null && loserScore !== null && winnerScore > loserScore;
+  const canCrown = currentMatch?.stage === 'final' && winnerScore !== null && loserScore !== null && winnerScore > loserScore;
 
   return (
     <div role="dialog" aria-modal="true" aria-label={championship ? 'تتويج بطل الدوري' : 'احتفال فوز المواجهة'} className="fixed inset-0 z-[9999] overflow-y-auto bg-[#060908] text-center text-white">
@@ -63,19 +64,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           <div className="relative mx-auto my-2 flex h-56 w-full max-w-[450px] sm:h-80 items-center justify-center">
             <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{background:'conic-gradient(from 150deg at 50% 12%,transparent 0deg,#f8d88a25 16deg,transparent 30deg,transparent 90deg,#f8d88a25 105deg,transparent 120deg)'}}/>
             <svg aria-hidden="true" viewBox="0 0 360 75" className="absolute bottom-0 w-full max-w-sm"><ellipse cx="180" cy="45" rx="145" ry="24" fill="#000" stroke="#a87c36"/><ellipse cx="180" cy="36" rx="116" ry="18" fill="#171b14" stroke="#e9bc65" strokeOpacity=".65"/></svg>
-            <motion.svg aria-hidden="true" viewBox="0 0 240 280" initial={reducedMotion ? false : {y:35,scale:.9,opacity:0}} animate={{y:0,scale:1,opacity:1}} transition={{duration:.8,ease:[0.22,1,0.36,1]}} className="relative h-[96%] w-auto drop-shadow-[0_15px_25px_#e6b95b40]">
-              <defs>
-                <linearGradient id="ec-metal" x1="0" x2="1"><stop stopColor="#63400f"/><stop offset=".19" stopColor="#efc56b"/><stop offset=".36" stopColor="#fff1bb"/><stop offset=".51" stopColor="#af7929"/><stop offset=".73" stopColor="#f7d88a"/><stop offset="1" stopColor="#57360b"/></linearGradient>
-                <linearGradient id="ec-dark" x1="0" x2="1" y1="0" y2="1"><stop stopColor="#f9db92"/><stop offset="1" stopColor="#77501c"/></linearGradient>
-              </defs>
-              <path d="M55 36 24 30 15 47 28 105 73 135 82 118 47 91 39 52 60 58M185 36 216 30 225 47 212 105 167 135 158 118 193 91 201 52 180 58" fill="url(#ec-metal)" stroke="#ffe4a1" strokeWidth="1"/>
-              <path d="M47 26 193 26 180 115 145 159 132 165 132 208 158 224 158 235 82 235 82 224 108 208 108 165 95 159 60 115Z" fill="url(#ec-metal)" stroke="#f8d98d" strokeWidth="1.5"/>
-              <path d="M47 26 93 52 108 165 95 159 60 115Z" fill="#fff5cf" fillOpacity=".28"/>
-              <path d="M193 26 147 52 132 165 145 159 180 115Z" fill="#352006" fillOpacity=".30"/>
-              <path d="M47 26 120 44 193 26 186 17 54 17Z" fill="#ffe5a6" stroke="#b78232"/>
-              <path d="M120 57 148 90 120 123 92 90Z" fill="#171d15" stroke="#ffdf8c" strokeWidth="2"/><path d="M108 78 132 78 124 90 132 103 108 103 116 90Z" fill="#f2c66c"/>
-              <path d="M82 235H158L180 250V267H60V250Z" fill="url(#ec-dark)" stroke="#e9bb69"/><path d="M60 250H180V267H60Z" fill="#171812" stroke="#d2a252"/><path d="M89 254H151V263H89Z" fill="#d6b36c"/>
-            </motion.svg>
+            <motion.div initial={reducedMotion ? false : {y:35,scale:.9,opacity:0}} animate={{y:0,scale:1,opacity:1}} transition={{duration:.8,ease:[0.22,1,0.36,1]}} className="relative h-[96%] aspect-[6/7]"><EliteTrophy className="h-full w-full drop-shadow-[0_15px_25px_#e6b95b40]" /></motion.div>
           </div>
           <motion.div initial={reducedMotion ? false : {opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{duration:.45,delay:reducedMotion?0:.45}} className="mx-auto flex max-w-xl flex-col items-center border-y border-amber-300/35 bg-black/25 px-4 py-5 sm:px-8">
             <span className="grid h-16 w-16 sm:h-20 sm:w-20 place-items-center rounded-2xl border-2" style={{backgroundColor:winnerTeam.color,borderColor:'#ffffff50'}}><GameIcon name={winnerTeam.logo || 'crown'} className="h-10 w-10 text-white" /></span>
