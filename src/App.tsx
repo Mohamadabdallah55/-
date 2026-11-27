@@ -91,6 +91,7 @@ export default function App() {
   const [isVictoryModalOpen, setIsVictoryModalOpen] = useState<boolean>(false);
   const [victoryWinner, setVictoryWinner] = useState<Team | null>(null);
   const [victoryLoser, setVictoryLoser] = useState<Team | null>(null);
+  const [victoryMatch, setVictoryMatch] = useState<CurrentMatch | null>(null);
   const [isScreenShaking, setIsScreenShaking] = useState<boolean>(false);
 
   // PWA Install prompt state
@@ -291,6 +292,8 @@ export default function App() {
           setTimeout(() => setIsScreenShaking(false), 500);
           setVictoryWinner(winner);
           setVictoryLoser(loser);
+          // Remote celebration commands do not include a certified final score.
+          setVictoryMatch(null);
           setIsVictoryModalOpen(true);
           try {
             confetti({
@@ -536,24 +539,11 @@ export default function App() {
     setMatchesHistory(updatedHistory);
     saveMatchesHistory(updatedHistory);
 
-    // Trigger Screen Shake & Victory Modal
-    setIsScreenShaking(true);
-    setTimeout(() => setIsScreenShaking(false), 500);
-
+    // Preserve the actual result before resetting the live scoreboard.
+    setVictoryMatch({ ...currentMatch, rounds: [...currentMatch.rounds] });
     setVictoryWinner(winnerObj);
     setVictoryLoser(loserObj);
     setIsVictoryModalOpen(true);
-
-    // Confetti burst
-    try {
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 },
-        zIndex: 9999,
-        colors: ['#A855F7', '#06B6D4', '#F59E0B', '#10B981'],
-      });
-    } catch {}
 
     // Reset current match score for next encounter
     const resetMatch: CurrentMatch = {
@@ -970,7 +960,7 @@ export default function App() {
           onClose={() => setIsVictoryModalOpen(false)}
           winnerTeam={victoryWinner}
           loserTeam={victoryLoser}
-          currentMatch={currentMatch}
+          currentMatch={victoryMatch}
           onNextMatch={() => {
             setIsVictoryModalOpen(false);
             handleResetCurrentMatch();
