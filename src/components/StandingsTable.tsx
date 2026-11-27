@@ -1,8 +1,8 @@
-import React, { useLayoutEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { LeagueRow, MatchRecord } from '../types';
 import { GameIcon } from './GameIcons';
 import { Trophy, Medal, History, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
-import { revealWithGsap } from '../utils/gsapMotion';
 import { SpotlightCard } from './SpotlightCard';
 import { CountUpValue } from './CountUpValue';
 
@@ -19,15 +19,26 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
   onOpenHistoryModal,
   onResetLeague,
 }) => {
-  const standingsRootRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => revealWithGsap(
-    standingsRootRef.current,
-    '.podium-place, .standing-row',
-    { y: 18, stagger: 0.055, duration: 0.62 },
-  ), [standings]);
+  const reducedMotion = useReducedMotion();
+  const previousRanks = useRef<Record<string, number>>({});
+  const [rankChanges, setRankChanges] = useState<Record<string, number>>({});
+  const orderKey = JSON.stringify(standings.map(row => row.teamId));
+  useLayoutEffect(() => {
+    const ids: string[] = JSON.parse(orderKey);
+    const next: Record<string, number> = {};
+    const changes: Record<string, number> = {};
+    ids.forEach((id, index) => {
+      next[id] = index + 1;
+      if (matchesHistory.length && previousRanks.current[id] !== undefined) {
+        changes[id] = previousRanks.current[id] - next[id];
+      }
+    });
+    previousRanks.current = next;
+    setRankChanges(changes);
+  }, [orderKey, matchesHistory.length]);
 
   return (
-    <div ref={standingsRootRef} className="standings-card w-full bg-[#0C1226]/80 border border-slate-800/80 rounded-2xl p-5 shadow-xl">
+    <div className="standings-card w-full bg-[#0C1226]/80 border border-slate-800/80 rounded-2xl p-5 shadow-xl">
       {/* Table Header Area */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5 pb-3 border-b border-slate-800/80">
         <div>
@@ -65,10 +76,10 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
       <div className="standings-podium" aria-label="المراكز الثلاثة الأولى">
         {[1, 0, 2].map((standingIndex) => {
           const row = standings[standingIndex];
-          if (!row) return null;
+          if (!row || !row.played) return null;
           const rank = standingIndex + 1;
           return <SpotlightCard key={row.teamId} className={`podium-place podium-rank-${rank}`}>
-            <span className="podium-rank">{rank === 1 ? '01 · البطل الحالي' : `0${rank} · المركز`}</span>
+            <span className="podium-rank">{rank === 1 ? '01 · متصدر الدوري' : `0${rank} · المركز`}</span>
             <span className="podium-team-mark" style={{ backgroundColor: row.team.color }}><GameIcon name={row.team.logo} /></span>
             <strong>{row.team.name}</strong>
             <small>{row.team.shortName}</small>
@@ -103,8 +114,10 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
               const isThird = rank === 3 && row.played > 0;
 
               return (
-                <tr
+                <motion.tr
                   key={row.teamId}
+                  layout={reducedMotion ? false : "position"}
+                  transition={{ layout: { duration: 0.36, ease: [0.22, 1, 0.36, 1] } }}
                   className={`standing-row rank-row-${rank} hover:bg-slate-800/40 transition-colors ${
                     isFirst ? 'bg-amber-950/20' : ''
                   }`}
@@ -140,6 +153,12 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
                       <div>
                         <div className="font-bold text-white font-changa text-base flex items-center gap-2">
                           <span>{row.team.name}</span>
+                          {Boolean(rankChanges[row.teamId]) && (
+                            <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${rankChanges[row.teamId] > 0 ? 'bg-emerald-950 text-emerald-300' : 'bg-rose-950 text-rose-300'}`} aria-label={`${rankChanges[row.teamId] > 0 ? 'صعد' : 'هبط'} ${Math.abs(rankChanges[row.teamId])} مراكز`}>
+                              {rankChanges[row.teamId] > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                              {Math.abs(rankChanges[row.teamId])}
+                            </span>
+                          )}
                           <span className="text-xs font-mono text-slate-400 font-normal">
                             ({row.team.shortName})
                           </span>
@@ -205,7 +224,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
                       )}
                     </div>
                   </td>
-                </tr>
+                </motion.tr>
               );
             })}
           </tbody>
