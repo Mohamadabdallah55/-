@@ -5,6 +5,7 @@ import { GameIcon } from './GameIcons';
 import { Plus, Minus, Trophy, CheckCircle2, RotateCcw, Play, Sparkles } from 'lucide-react';
 import { sound } from '../utils/audio';
 import { CountUpValue } from './CountUpValue';
+import { EliteTrophy } from './EliteTrophy';
 
 interface LiveScoreboardProps {
   currentMatch: CurrentMatch;
@@ -16,6 +17,7 @@ interface LiveScoreboardProps {
   onFinishMatch: () => void;
   onResetCurrentMatch: () => void;
   onOpenBanPickTab: () => void;
+  onToggleFinal?: () => void;
 }
 
 export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
@@ -28,11 +30,13 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
   onFinishMatch,
   onResetCurrentMatch,
   onOpenBanPickTab,
+  onToggleFinal,
 }) => {
   const teamA = teams.find((t) => t.id === currentMatch.teamAId) || teams[0];
   const teamB = teams.find((t) => t.id === currentMatch.teamBId) || teams[1] || teams[0];
 
   const reducedMotion = useReducedMotion();
+  const isFinal = currentMatch.stage === 'final';
   const activeGame = games.find((g) => g.id === currentMatch.activeGameId);
   const activeCategory = activeGame ? categories.find((c) => c.id === activeGame.categoryId) : null;
 
@@ -99,6 +103,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
         </div>
       </div>
 
+      {onToggleFinal && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border border-amber-300/25 bg-amber-950/20 px-4 py-3"><span className="text-sm font-bold text-amber-200">{isFinal ? 'المباراة النهائية الرسمية' : 'المباراة العادية'}</span><button type="button" onClick={onToggleFinal} disabled={Boolean(currentMatch.teamAScore || currentMatch.teamBScore)} className="rounded-lg border border-amber-300/40 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-40">{isFinal ? 'إلغاء وضع النهائي' : 'تفعيل وضع النهائي'}</button></div>}
       {/* Match Setup Selectors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Team A Picker */}
@@ -154,8 +159,8 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
           </svg>
           <div className="absolute inset-x-0 top-0 h-[3px]" style={{background:'linear-gradient(90deg,transparent,#bef264,transparent)'}}/>
           <div className="mb-6 text-center">
-            <span className="font-orbitron text-[10px] sm:text-xs font-bold tracking-[0.25em] text-emerald-300">ELITE CLASH / MATCH CENTER</span>
-            <h2 className="mt-2 font-changa text-2xl sm:text-4xl font-black text-white">ساحة المواجهة</h2>
+            <span className="font-orbitron text-[10px] sm:text-xs font-bold tracking-[0.25em] text-emerald-300">{isFinal ? "ELITE CLASH / THE GRAND FINAL" : "ELITE CLASH / MATCH CENTER"}</span>
+            <h2 className="mt-2 font-changa text-2xl sm:text-4xl font-black text-white">{isFinal ? "المباراة النهائية" : "ساحة المواجهة"}</h2>
             <span className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/25 px-3 py-1 text-xs text-slate-200">
               <span className={`h-2 w-2 rounded-full ${isMatchDecided ? 'bg-amber-400' : currentMatch.teamAScore + currentMatch.teamBScore > 0 ? 'bg-emerald-400' : 'bg-slate-400'}`} />
               {isMatchDecided ? 'حُسمت المواجهة — بانتظار اعتماد النتيجة' : currentMatch.teamAScore + currentMatch.teamBScore > 0 ? 'المواجهة جارية' : 'جاهزون للمواجهة'}
@@ -182,7 +187,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
                   </div>
                 </motion.div>
               );
-              return slot === 'A' ? <React.Fragment key={slot}>{block}<div className="self-center text-center"><div aria-hidden="true" className="mb-2 font-orbitron text-[10px] sm:text-sm tracking-[.25em] text-lime-300">VERSUS</div>
+              return slot === 'A' ? <React.Fragment key={slot}>{block}<div className="self-center text-center">{isFinal && <motion.div initial={reducedMotion ? false : {opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{duration:.55}} className="mx-auto mb-2 h-16 w-14 sm:h-32 sm:w-28"><EliteTrophy className="h-full w-full drop-shadow-[0_0_16px_#e3b25466]" /></motion.div>}<div aria-hidden="true" className="mb-2 font-orbitron text-[10px] sm:text-sm tracking-[.25em] text-lime-300">VERSUS</div>
                 <div className="flex items-center justify-center gap-1 sm:gap-3 font-orbitron text-3xl sm:text-7xl font-black tabular-nums text-white" dir="ltr">
                   <CountUpValue value={currentMatch.teamAScore} /><span className="text-slate-500 text-xl sm:text-4xl">:</span><CountUpValue value={currentMatch.teamBScore} />
                 </div>
