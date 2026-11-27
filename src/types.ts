@@ -21,6 +21,7 @@ export interface MatchRound {
 }
 
 export interface CurrentMatch {
+  stage?: 'final'; // explicitly selected by organizer
   teamAId: string;
   teamBId: string;
   teamAScore: number; // 0 to 3 (Best of 5)
@@ -31,6 +32,7 @@ export interface CurrentMatch {
 }
 
 export interface MatchRecord {
+  stage?: 'final';
   id: string;
   date: string;
   timestamp: number;
