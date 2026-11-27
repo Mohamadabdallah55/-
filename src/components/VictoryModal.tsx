@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { CinematicStage } from './CinematicStage';
+import { TeamCrest } from './TeamCrest';
 import { motion, useReducedMotion } from 'motion/react';
 import { Team, CurrentMatch } from '../types';
-import { GameIcon } from './GameIcons';
 import { EliteTrophy } from './EliteTrophy';
 import { X, Camera } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -52,8 +54,9 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   const loserScore = currentMatch ? (currentMatch.teamAId === loserTeam.id ? currentMatch.teamAScore : currentMatch.teamBScore) : null;
   const canCrown = currentMatch?.stage === 'final' && winnerScore !== null && loserScore !== null && winnerScore > loserScore;
 
-  return (
+  return createPortal(
     <div role="dialog" aria-modal="true" aria-label={championship ? 'تتويج بطل الدوري' : 'احتفال فوز المواجهة'} className="fixed inset-0 z-[9999] overflow-y-auto bg-[#060908] text-center text-white">
+      <div className="fixed inset-0 pointer-events-none opacity-75"><CinematicStage gold={championship} left={winnerTeam.color} right={winnerTeam.color}/></div>
       <div aria-hidden="true" className="fixed inset-0 pointer-events-none" style={{background:`radial-gradient(ellipse at 50% 10%, #d6a64c30, transparent 50%), radial-gradient(ellipse at 50% 50%, ${winnerTeam.color}38, transparent 62%)`}} />
       <div className="relative mx-auto flex min-h-full max-w-5xl flex-col items-center justify-center px-4 py-12 sm:px-10 sm:py-16">
         <button autoFocus type="button" onClick={onClose} aria-label="إغلاق شاشة التتويج" className="absolute left-4 top-4 grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-white hover:bg-white/15"><X className="h-6 w-6" /></button>
@@ -67,7 +70,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             <motion.div initial={reducedMotion ? false : {y:35,scale:.9,opacity:0}} animate={{y:0,scale:1,opacity:1}} transition={{duration:.8,ease:[0.22,1,0.36,1]}} className="relative h-[96%] aspect-[6/7]"><EliteTrophy className="h-full w-full drop-shadow-[0_15px_25px_#e6b95b40]" /></motion.div>
           </div>
           <motion.div initial={reducedMotion ? false : {opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{duration:.45,delay:reducedMotion?0:.45}} className="mx-auto flex max-w-xl flex-col items-center border-y border-amber-300/35 bg-black/25 px-4 py-5 sm:px-8">
-            <span className="grid h-16 w-16 sm:h-20 sm:w-20 place-items-center rounded-2xl border-2" style={{backgroundColor:winnerTeam.color,borderColor:'#ffffff50'}}><GameIcon name={winnerTeam.logo || 'crown'} className="h-10 w-10 text-white" /></span>
+            <TeamCrest team={winnerTeam} className="w-16 sm:w-24" />
             <h2 className="mt-3 break-words max-w-full font-changa text-3xl sm:text-5xl font-black text-white">{winnerTeam.name}</h2>
             {winnerTeam.captain && <p className="mt-1 text-sm text-amber-200">الكابتن: {winnerTeam.captain}</p>}
             {winnerScore !== null && loserScore !== null ? (
@@ -87,6 +90,6 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           <p className="mt-4 text-xs text-slate-400">{championship ? 'عرض تتويج مرئي بناءً على اعتماد المنظم؛ لا يغيّر نتائج الدوري.' : 'فوز المواجهة لا يعني تلقائياً الفوز بلقب الدوري.'}</p>
         </motion.div>
       </div>
-    </div>
+    </div>, document.body
   );
 };
