@@ -136,9 +136,23 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
 
       {/* MAIN BROADCAST SCOREBOARD */}
       <div className="relative my-4">
-        <section aria-label="مركز المواجهة" className="relative isolate overflow-hidden rounded-[28px] border border-white/15 bg-[#080d0c] px-3 py-5 sm:px-8 sm:py-10">
+        <section aria-label="مركز المواجهة" className="relative isolate overflow-hidden rounded-sm border border-white/15 bg-[#080d0c] px-3 py-5 sm:px-8 sm:py-12">
           <div aria-hidden="true" className="absolute inset-0 -z-10 opacity-60" style={{background: `radial-gradient(ellipse at 100% 35%, ${teamA?.color || '#a855f7'}55, transparent 48%), radial-gradient(ellipse at 0% 35%, ${teamB?.color || '#06b6d4'}55, transparent 48%), linear-gradient(160deg,#101918,#080d0c 60%)`}} />
           <div aria-hidden="true" className="absolute inset-0 -z-10 opacity-[0.08]" style={{backgroundImage:'linear-gradient(120deg,transparent 49%,white 50%,transparent 51%)',backgroundSize:'48px 48px'}} />
+          {/* Found Studio's stadium-scale light structures, translated into original ELITE CLASH geometry. */}
+          <svg aria-hidden="true" viewBox="0 0 1000 460" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full -z-10 pointer-events-none">
+            <defs>
+              <linearGradient id="arena-floor" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#a3e635" stopOpacity=".16"/><stop offset="1" stopColor="#a3e635" stopOpacity="0"/></linearGradient>
+            </defs>
+            <path d="M-100 420 500 230 1100 420M-100 450 500 250 1100 450" fill="none" stroke="url(#arena-floor)" strokeWidth="2"/>
+            <g fill="none" strokeWidth="2" opacity=".45">
+              <path d="M-50 380 180 65 340 65 460 190" stroke={teamB?.color || '#06b6d4'}/>
+              <path d="M1050 380 820 65 660 65 540 190" stroke={teamA?.color || '#a855f7'}/>
+              <path d="M-50 310 150 38 350 38 465 150M1050 310 850 38 650 38 535 150" stroke="#d9f99d" strokeOpacity=".24"/>
+            </g>
+            <path d="M500 110 536 180 500 250 464 180Z" fill="#d9f99d" fillOpacity=".045" stroke="#d9f99d" strokeOpacity=".18"/>
+          </svg>
+          <div className="absolute inset-x-0 top-0 h-[3px]" style={{background:'linear-gradient(90deg,transparent,#bef264,transparent)'}}/>
           <div className="mb-6 text-center">
             <span className="font-orbitron text-[10px] sm:text-xs font-bold tracking-[0.25em] text-emerald-300">ELITE CLASH / MATCH CENTER</span>
             <h2 className="mt-2 font-changa text-2xl sm:text-4xl font-black text-white">ساحة المواجهة</h2>
@@ -153,9 +167,9 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
               const score = slot === 'A' ? currentMatch.teamAScore : currentMatch.teamBScore;
               const accent = team?.color || (slot === 'A' ? '#a855f7' : '#06b6d4');
               const block = (
-                <motion.div key={team?.id || slot} initial={reducedMotion ? false : {opacity:0, x:slot === 'A' ? 16 : -16}} animate={{opacity:1,x:0}} transition={{duration:0.28}} className="min-w-0 flex flex-col items-center text-center">
-                  <div className="grid aspect-square w-16 sm:w-28 place-items-center rounded-2xl border-2 bg-black/30" style={{borderColor:accent,boxShadow:`0 0 32px ${accent}35`}}>
-                    <GameIcon name={team?.logo || 'shield'} className="h-9 w-9 sm:h-16 sm:w-16 text-white" />
+                <motion.div key={team?.id || slot} initial={reducedMotion ? false : {opacity:0, x:slot === 'A' ? 16 : -16}} animate={{opacity:1,x:0}} transition={{duration:0.55,ease:[0.22,1,0.36,1],delay:slot === "A" ? 0 : 0.08}} className="min-w-0 flex flex-col items-center text-center">
+                  <div className="relative grid aspect-square w-[clamp(4rem,15vw,12rem)] place-items-center" style={{color:accent}}><div aria-hidden="true" className="absolute inset-0 rotate-45 border border-current opacity-40"/><div aria-hidden="true" className="absolute inset-[12%] rotate-45 border-2 border-current bg-black/30" style={{boxShadow:`0 0 28px ${accent}45, inset 0 0 20px ${accent}30`}}/>
+                    <GameIcon name={team?.logo || 'shield'} className="relative h-[55%] w-[55%] text-white" />
                   </div>
                   <h3 className="mt-3 break-words w-full font-changa text-sm sm:text-2xl font-black text-white">{team?.name || 'اختر الفريق'}</h3>
                   <p className="text-[10px] sm:text-xs text-slate-300">{team?.shortName || '—'}</p>
@@ -168,11 +182,11 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
                   </div>
                 </motion.div>
               );
-              return slot === 'A' ? <React.Fragment key={slot}>{block}<div className="self-center text-center">
-                <div className="flex items-center justify-center gap-1 sm:gap-3 font-orbitron text-3xl sm:text-6xl font-black tabular-nums text-white" dir="ltr">
+              return slot === 'A' ? <React.Fragment key={slot}>{block}<div className="self-center text-center"><div aria-hidden="true" className="mb-2 font-orbitron text-[10px] sm:text-sm tracking-[.25em] text-lime-300">VERSUS</div>
+                <div className="flex items-center justify-center gap-1 sm:gap-3 font-orbitron text-3xl sm:text-7xl font-black tabular-nums text-white" dir="ltr">
                   <CountUpValue value={currentMatch.teamAScore} /><span className="text-slate-500 text-xl sm:text-4xl">:</span><CountUpValue value={currentMatch.teamBScore} />
                 </div>
-                <span className="mt-3 inline-block rounded-md bg-white/10 px-2 py-1 font-orbitron text-[10px] tracking-wider text-slate-300">BEST OF 5</span>
+                <span className="mt-3 inline-block border-y border-lime-300/30 px-2 py-1 font-orbitron text-[10px] tracking-wider text-lime-200">BEST OF 5</span>
                 <p className="mt-2 max-w-[110px] break-words text-[10px] sm:text-xs text-emerald-200">{activeGame?.nameAr || 'أول من يصل إلى 3'}</p>
               </div></React.Fragment> : <React.Fragment key={slot}>{block}</React.Fragment>;
             })}
