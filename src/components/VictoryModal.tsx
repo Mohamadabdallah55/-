@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Team, CurrentMatch } from '../types';
 import { GameIcon } from './GameIcons';
-import { Trophy, Sparkles, X, Camera } from 'lucide-react';
+import { Trophy, X, Camera } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sound } from '../utils/audio';
 
@@ -10,7 +11,7 @@ interface VictoryModalProps {
   onClose: () => void;
   winnerTeam: Team;
   loserTeam: Team;
-  currentMatch: CurrentMatch;
+  currentMatch: CurrentMatch | null;
   onNextMatch?: () => void;
   onOpenRecapModal?: () => void;
 }
@@ -24,144 +25,67 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   onNextMatch,
   onOpenRecapModal,
 }) => {
+  const reducedMotion = useReducedMotion();
+  const [championship, setChampionship] = useState(false);
   useEffect(() => {
-    if (isOpen) {
-      sound.playChampionshipVictory();
-
-      // Multi-stage confetti celebration
-      try {
-        confetti({
-          particleCount: 150,
-          spread: 100,
-          origin: { y: 0.6 },
-          colors: [winnerTeam.color, '#F59E0B', '#10B981', '#A855F7', '#06B6D4'],
-        });
-
-        const timer = setTimeout(() => {
-          confetti({
-            particleCount: 100,
-            angle: 60,
-            spread: 80,
-            origin: { x: 0 },
-            colors: [winnerTeam.color, '#F59E0B'],
-          });
-          confetti({
-            particleCount: 100,
-            angle: 120,
-            spread: 80,
-            origin: { x: 1 },
-            colors: [winnerTeam.color, '#10B981'],
-          });
-        }, 400);
-
-        return () => clearTimeout(timer);
-      } catch {}
-    }
-  }, [isOpen, winnerTeam]);
+    if (!isOpen) return;
+    setChampionship(false);
+  }, [isOpen, winnerTeam.id]);
+  useEffect(() => {
+    if (!isOpen) return;
+    sound.playChampionshipVictory();
+    if (reducedMotion) return;
+    try {
+      confetti({ particleCount: 70, spread: 75, origin: { y: 0.62 }, zIndex: 10000, disableForReducedMotion: true, colors: [winnerTeam.color, '#f59e0b', '#fef3c7'] });
+    } catch {}
+  }, [isOpen, winnerTeam.id, winnerTeam.color, reducedMotion]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
-
-  const winnerScore = Math.max(currentMatch.teamAScore, currentMatch.teamBScore);
-  const loserScore = Math.min(currentMatch.teamAScore, currentMatch.teamBScore);
+  const winnerScore = currentMatch ? (currentMatch.teamAId === winnerTeam.id ? currentMatch.teamAScore : currentMatch.teamBScore) : null;
+  const loserScore = currentMatch ? (currentMatch.teamAId === loserTeam.id ? currentMatch.teamAScore : currentMatch.teamBScore) : null;
+  const canCrown = winnerScore !== null && loserScore !== null && winnerScore > loserScore;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 select-none animate-fade-in">
-      {/* Ambient glowing spotlight for winner */}
-      <div
-        className="absolute inset-0 max-w-2xl mx-auto rounded-full opacity-30 pointer-events-none transition-colors"
-        style={{
-          background: `radial-gradient(circle, ${winnerTeam.color} 0%, transparent 70%)`,
-        }}
-      />
-
-      <div className="relative z-10 max-w-xl w-full bg-[#080D21] border-2 border-amber-400/80 rounded-3xl p-6 sm:p-10 shadow-[0_0_80px_rgba(245,158,11,0.35)] text-center">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* Crown & Trophy Header */}
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
-          <span className="font-orbitron font-black text-xs sm:text-sm tracking-widest text-amber-400 uppercase bg-amber-950/80 px-4 py-1 rounded-full border border-amber-500/50">
-            MATCH CHAMPION
-          </span>
-          <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
-        </div>
-
-        {/* Winner Crest with Neon Ring */}
-        <div className="relative my-6 flex justify-center">
-          <div
-            className="w-28 h-28 sm:w-36 sm:h-36 rounded-3xl p-1 flex items-center justify-center shadow-2xl transition-transform hover:scale-105"
-            style={{
-              backgroundColor: `${winnerTeam.color}25`,
-              border: `3px solid ${winnerTeam.color}`,
-              boxShadow: `0 0 50px ${winnerTeam.color}80`,
-            }}
-          >
-            <GameIcon name={winnerTeam.logo || 'crown'} className="w-16 h-16 sm:w-20 sm:h-20 text-white" />
+    <div role="dialog" aria-modal="true" aria-label={championship ? 'تتويج بطل الدوري' : 'احتفال فوز المواجهة'} className="fixed inset-0 z-[9999] overflow-y-auto bg-[#060908] text-center text-white">
+      <div aria-hidden="true" className="fixed inset-0 pointer-events-none" style={{background:`radial-gradient(ellipse at 50% 10%, #d6a64c30, transparent 50%), radial-gradient(ellipse at 50% 50%, ${winnerTeam.color}38, transparent 62%)`}} />
+      <div className="relative mx-auto flex min-h-full max-w-5xl flex-col items-center justify-center px-4 py-12 sm:px-10 sm:py-16">
+        <button autoFocus type="button" onClick={onClose} aria-label="إغلاق شاشة التتويج" className="absolute left-4 top-4 grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/40 text-white hover:bg-white/15"><X className="h-6 w-6" /></button>
+        <motion.div initial={reducedMotion ? false : { opacity:0, y:14 }} animate={{opacity:1,y:0}} transition={{duration:0.4}} className="w-full">
+          <p className="font-orbitron text-[10px] sm:text-sm font-bold tracking-[0.3em] text-amber-300">ELITE CLASH / HALL OF VICTORY</p>
+          <h1 className="mt-3 font-changa text-3xl sm:text-6xl font-black text-white">{championship ? 'بطل صراع النخبة' : 'لحظة الانتصار'}</h1>
+          <div className="relative mx-auto my-7 flex h-36 w-36 sm:h-56 sm:w-56 items-center justify-center">
+            <div aria-hidden="true" className="absolute inset-0 rounded-full border border-amber-400/25" />
+            <div aria-hidden="true" className="absolute inset-4 rounded-full border border-amber-400/15" />
+            <motion.div initial={reducedMotion ? false : {scale:0.78,opacity:0}} animate={{scale:1,opacity:1}} transition={{duration:0.5,delay:0.12}} className="grid h-24 w-24 sm:h-40 sm:w-40 place-items-center rounded-[30%] border border-amber-200/50 bg-gradient-to-br from-amber-100 via-amber-500 to-amber-950 shadow-[0_16px_55px_#e6a73c40]">
+              <Trophy className="h-16 w-16 sm:h-28 sm:w-28 text-amber-950" strokeWidth={1.4} />
+            </motion.div>
           </div>
-
-          <div className="absolute -top-4 -right-2 sm:-right-4 w-12 h-12 rounded-full bg-amber-500 border-2 border-white flex items-center justify-center shadow-lg animate-bounce">
-            <Trophy className="w-7 h-7 text-slate-950" />
+          <div className="mx-auto flex max-w-xl flex-col items-center rounded-3xl border border-white/15 bg-black/25 px-4 py-5 sm:px-8">
+            <span className="grid h-16 w-16 sm:h-20 sm:w-20 place-items-center rounded-2xl border-2" style={{backgroundColor:winnerTeam.color,borderColor:'#ffffff50'}}><GameIcon name={winnerTeam.logo || 'crown'} className="h-10 w-10 text-white" /></span>
+            <h2 className="mt-3 break-words max-w-full font-changa text-3xl sm:text-5xl font-black text-white">{winnerTeam.name}</h2>
+            {winnerTeam.captain && <p className="mt-1 text-sm text-amber-200">الكابتن: {winnerTeam.captain}</p>}
+            {winnerScore !== null && loserScore !== null ? (
+              <div className="mt-4 flex items-center justify-center gap-4 font-orbitron text-3xl sm:text-4xl font-black tabular-nums" dir="ltr">
+                <span className="text-amber-300">{winnerScore}</span><span className="text-slate-500">:</span><span className="text-slate-300">{loserScore}</span>
+              </div>
+            ) : <p className="mt-4 text-sm text-slate-300">نتيجة المواجهة غير متاحة في أمر الاحتفال.</p>}
+            <p className="mt-2 text-xs sm:text-sm text-slate-300">المنافس: {loserTeam.name}</p>
           </div>
-        </div>
-
-        {/* Winner Name */}
-        <h2 className="text-3xl sm:text-5xl font-black font-changa text-white uppercase tracking-wide">
-          {winnerTeam.name}
-        </h2>
-        <p className="text-base sm:text-lg text-amber-300 font-bold font-changa mt-1">
-          بطل المواجهة الرسمية بنتيجة ({winnerScore} - {loserScore})
-        </p>
-
-        {/* Score comparison pill */}
-        <div className="my-6 inline-flex items-center justify-center gap-6 px-6 py-3 rounded-2xl bg-[#050814] border border-slate-700 shadow-inner">
-          <div className="text-center">
-            <span className="text-xs text-slate-400 font-changa block">{winnerTeam.shortName}</span>
-            <span className="text-3xl font-orbitron font-black text-amber-400">{winnerScore}</span>
+          <div className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-3">
+            {canCrown && !championship && <button type="button" onClick={() => { if (window.confirm('هل هذه المباراة هي النهائي الرسمي، وهل تم اعتماد هذا الفريق بطلاً للدوري؟')) setChampionship(true); }} className="rounded-xl border border-amber-400/60 bg-amber-950/40 px-5 py-3 font-changa font-bold text-amber-200">عرض تتويج بطل الدوري</button>}
+            {championship && <button type="button" onClick={()=>setChampionship(false)} className="rounded-xl border border-white/20 px-5 py-3 font-changa text-sm">العودة إلى احتفال المواجهة</button>}
+            {onOpenRecapModal && <button type="button" onClick={onOpenRecapModal} className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-5 py-3 font-changa text-sm"><Camera className="h-4 w-4" /> ملخص المواجهة</button>}
+            {onNextMatch && <button type="button" onClick={() => {onClose();onNextMatch();}} className="rounded-xl bg-amber-300 px-5 py-3 font-changa font-bold text-slate-950 hover:bg-amber-200">مواجهة جديدة</button>}
+            <button type="button" onClick={onClose} className="rounded-xl border border-white/20 px-5 py-3 font-changa text-sm text-slate-200">إغلاق العرض</button>
           </div>
-          <span className="text-lg font-orbitron font-bold text-slate-600">-</span>
-          <div className="text-center">
-            <span className="text-xs text-slate-400 font-changa block">{loserTeam.shortName}</span>
-            <span className="text-3xl font-orbitron font-black text-slate-500">{loserScore}</span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
-          {onOpenRecapModal && (
-            <button
-              onClick={onOpenRecapModal}
-              className="w-full sm:w-auto py-3 px-4 rounded-2xl bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/70 text-cyan-200 font-bold font-changa text-xs flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
-            >
-              <Camera className="w-4 h-4 text-cyan-400" />
-              <span>مشاركة ملخص المواجهة 📸</span>
-            </button>
-          )}
-
-          {onNextMatch && (
-            <button
-              onClick={() => {
-                onClose();
-                onNextMatch();
-              }}
-              className="w-full sm:flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-amber-500 via-purple-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white font-bold font-changa text-xs sm:text-sm shadow-xl transition-all active:scale-95"
-            >
-              بدء مواجهة جديدة ⚔️
-            </button>
-          )}
-
-          <button
-            onClick={onClose}
-            className="w-full sm:w-auto py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold font-changa text-xs transition-colors"
-          >
-            إغلاق
-          </button>
-        </div>
+          <p className="mt-4 text-xs text-slate-400">{championship ? 'عرض تتويج مرئي بناءً على اعتماد المنظم؛ لا يغيّر نتائج الدوري.' : 'فوز المواجهة لا يعني تلقائياً الفوز بلقب الدوري.'}</p>
+        </motion.div>
       </div>
     </div>
   );
