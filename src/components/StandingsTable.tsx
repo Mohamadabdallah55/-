@@ -2,8 +2,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { LeagueRow, MatchRecord } from '../types';
 import { GameIcon } from './GameIcons';
-import { Trophy, Medal, History, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
-import { SpotlightCard } from './SpotlightCard';
+import { Trophy, History, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { CountUpValue } from './CountUpValue';
 
 interface StandingsTableProps {
@@ -38,13 +37,13 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
   }, [orderKey, matchesHistory.length]);
 
   return (
-    <div className="standings-card w-full bg-[#0C1226]/80 border border-slate-800/80 rounded-2xl p-5 shadow-xl">
+    <div className="standings-card w-full bg-[#080d0c] border border-white/15 rounded-sm p-3 sm:p-5 shadow-xl">
       {/* Table Header Area */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5 pb-3 border-b border-slate-800/80">
         <div>
           <h2 className="text-xl font-bold font-changa text-white flex items-center gap-2">
             <Trophy className="w-5 h-5 text-amber-400" />
-            <span>جدول ترتيب دوري صراع النخبة (الفرق الـ 6)</span>
+            <span>جدول الترتيب الرسمي</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             يُحتسب الترتيب تلقائياً حسب نقاط الفوز المحددة لكل أسبوع، ثم فارق الجولات والجولات المسجلة.
@@ -73,25 +72,27 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
         </div>
       </div>
 
-      <div className="standings-podium" aria-label="المراكز الثلاثة الأولى">
-        {[1, 0, 2].map((standingIndex) => {
-          const row = standings[standingIndex];
-          if (!row || !row.played) return null;
-          const rank = standingIndex + 1;
-          return <SpotlightCard key={row.teamId} className={`podium-place podium-rank-${rank}`}>
-            <span className="podium-rank">{rank === 1 ? '01 · متصدر الدوري' : `0${rank} · المركز`}</span>
-            <span className="podium-team-mark" style={{ backgroundColor: row.team.color }}><GameIcon name={row.team.logo} /></span>
-            <strong>{row.team.name}</strong>
-            <small>{row.team.shortName}</small>
-            <span className="podium-points"><CountUpValue value={row.points} /><small> نقطة</small></span>
-            <span className="podium-record">{row.won} فوز <i /> {row.played} مباراة</span>
-          </SpotlightCard>;
-        })}
+      {/* Broadcast-style editorial leader strip. No champion is inferred from provisional ranking. */}
+      <div className="mb-4 overflow-hidden border-y border-lime-300/25 bg-[#101b15]">
+        <div className="flex items-center justify-between gap-3 px-3 py-2 sm:px-5" dir="rtl">
+          <span className="font-orbitron text-[10px] font-bold tracking-widest text-lime-300">ELITE CLASH / LEAGUE TABLE</span>
+          <span className="text-xs font-bold text-white">{matchesHistory.length} مواجهة مكتملة</span>
+        </div>
+        {standings[0]?.played > 0 && (
+          <div className="relative flex items-center justify-between gap-3 overflow-hidden border-t border-white/10 px-3 py-4 sm:px-5" style={{background:`linear-gradient(105deg,transparent,${standings[0].team.color}35)`}}>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="font-orbitron text-3xl font-black text-lime-300">01</span>
+              <span className="grid h-12 w-12 shrink-0 place-items-center border border-white/25" style={{backgroundColor:standings[0].team.color}}><GameIcon name={standings[0].team.logo} className="h-7 w-7 text-white"/></span>
+              <div className="min-w-0"><div className="text-[10px] font-bold text-lime-300">متصدر الدوري</div><strong className="break-words font-changa text-lg text-white">{standings[0].team.name}</strong></div>
+            </div>
+            <div className="shrink-0 text-center"><strong className="font-orbitron text-3xl font-black text-white"><CountUpValue value={standings[0].points}/></strong><div className="text-[10px] text-slate-300">نقطة</div></div>
+          </div>
+        )}
       </div>
 
       {/* Standings Responsive Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-right text-sm">
+        <table className="w-full min-w-[650px] border-separate border-spacing-y-1.5 text-right text-sm">
           <thead>
             <tr className="border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
               <th className="py-3 px-2 text-center w-12">#</th>
@@ -118,15 +119,13 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
                   key={row.teamId}
                   layout={reducedMotion ? false : "position"}
                   transition={{ layout: { duration: 0.36, ease: [0.22, 1, 0.36, 1] } }}
-                  className={`standing-row rank-row-${rank} hover:bg-slate-800/40 transition-colors ${
-                    isFirst ? 'bg-amber-950/20' : ''
-                  }`}
+                  className={`standing-row rank-row-${rank} transition-colors ${isFirst ? "bg-lime-950/60" : index % 2 === 0 ? "bg-[#13201b]" : "bg-[#101713]"}`}
                 >
                   {/* Rank */}
-                  <td className="py-3 px-2 text-center font-orbitron font-bold">
+                  <td className="py-3 px-2 text-center font-orbitron font-bold" style={{borderInlineStart:`4px solid ${row.team.color}`}}>
                     {isFirst ? (
                       <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs shadow-sm">
-                        <Medal className="w-4 h-4 text-amber-400" />
+                        01
                       </span>
                     ) : isSecond ? (
                       <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-400/20 text-slate-200 border border-slate-400/40 text-xs">
@@ -199,7 +198,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
                   </td>
 
                   {/* Points */}
-                  <td className="py-3 px-4 text-center font-orbitron font-extrabold text-lg text-amber-300 tabular-nums">
+                  <td className="bg-lime-300/10 py-3 px-4 text-center font-orbitron font-extrabold text-xl text-lime-200 tabular-nums">
                     <CountUpValue value={row.points} />
                   </td>
 
