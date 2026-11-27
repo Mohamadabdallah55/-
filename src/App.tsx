@@ -52,6 +52,7 @@ import { MobileRemoteController } from './components/MobileRemoteController';
 import { MobileConnectModal } from './components/MobileConnectModal';
 import { ArenaStageView } from './components/ArenaStageView';
 import { VictoryModal } from './components/VictoryModal';
+import { CinematicIntro } from './components/CinematicIntro';
 import { HotkeysModal } from './components/HotkeysModal';
 import { SpotlightCard } from './components/SpotlightCard';
 import { CountUpValue } from './components/CountUpValue';
@@ -82,6 +83,14 @@ const PAGE_COPY = {
 export default function App() {
   // Check if opened as standalone window via URL hash #standalone-timer or #remote / /remote / ?mode=remote
   const [isStandaloneTimer, setIsStandaloneTimer] = useState<boolean>(false);
+  const [introOpen, setIntroOpen] = useState(false);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.pathname !== '/' && url.pathname !== '/index.html') return;
+    if (url.hash || url.searchParams.has('tab') || url.searchParams.has('mode') || url.searchParams.has('remote')) return;
+    try { if (sessionStorage.getItem('ce-intro-v1')) return; sessionStorage.setItem('ce-intro-v1','1'); } catch {}
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) setIntroOpen(true);
+  }, []);
   const [isRemoteMode, setIsRemoteMode] = useState<boolean>(false);
   const [isMobileConnectModalOpen, setIsMobileConnectModalOpen] = useState<boolean>(false);
 
@@ -327,6 +336,7 @@ export default function App() {
   // Keyboard Hotkeys Manager
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (introOpen || isVictoryModalOpen) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -419,7 +429,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentMatch]);
+  }, [currentMatch, introOpen, isVictoryModalOpen]);
 
   // Column game swap handler (from phone or PC)
   const handleChangeColumnGame = (categoryId: string, slotIndex: number, newGameId: string) => {
@@ -472,6 +482,7 @@ export default function App() {
       if (newTeamId === nextMatch.teamAId) return;
       nextMatch.teamBId = newTeamId;
     }
+    if (nextMatch.teamAId !== currentMatch.teamAId || nextMatch.teamBId !== currentMatch.teamBId) delete nextMatch.stage;
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
@@ -489,12 +500,24 @@ export default function App() {
     saveCurrentMatch(nextMatch);
   };
 
+  const handleToggleFinal = () => {
+    if (currentMatch.teamAScore || currentMatch.teamBScore || currentMatch.teamAId === currentMatch.teamBId) return;
+    if (!currentMatch.stage && !window.confirm('اعتماد الفريقين المختارين لخوض المباراة النهائية الرسمية؟')) return;
+    const next: CurrentMatch = { ...currentMatch, stage: currentMatch.stage === 'final' ? undefined : 'final' };
+    setCurrentMatch(next);
+    saveCurrentMatch(next);
+  };
+
   // Finish Match and Update Standings (CRITICAL PRD REQUIREMENT)
   const handleFinishMatch = () => {
     if (currentMatch.teamAScore === 0 && currentMatch.teamBScore === 0) {
       return;
     }
 
+    if (currentMatch.stage === 'final' && Math.max(currentMatch.teamAScore, currentMatch.teamBScore) !== 3) {
+      window.alert('لا يعتمد النهائي قبل وصول أحد الفريقين إلى ثلاث جولات.');
+      return;
+    }
     if (currentMatch.teamAScore === currentMatch.teamBScore) {
       return;
     }
@@ -512,6 +535,7 @@ export default function App() {
     const loserObj = teams.find((t) => t.id === loserId) || (loserId === currentMatch.teamAId ? teamA : teamB);
 
     const newRecord: MatchRecord = {
+      stage: currentMatch.stage,
       id: `match-${Date.now()}`,
       date: new Date().toLocaleDateString('ar-SA', {
         month: 'short',
@@ -709,6 +733,7 @@ export default function App() {
         isScreenShaking ? 'animate-screen-shake' : ''
       }`}
     >
+      {introOpen && <CinematicIntro teams={teams} onClose={() => setIntroOpen(false)} />}
       {/* Top Bar Navigation */}
       <Header
         activeTab={activeTab}
@@ -737,7 +762,7 @@ export default function App() {
             <h1>{page.title}</h1>
             <p>{page.description}</p>
           </div>
-          <div className="page-heading-stamp"><span>CLASH</span><strong>01</strong><small>ELITE LEAGUE</small></div>
+          <div className="flex items-center gap-3"><button type="button" onClick={() => setIntroOpen(true)} className="rounded-lg border border-lime-300/30 px-3 py-2 text-xs font-bold text-lime-200">إعادة الافتتاحية</button><div className="page-heading-stamp"><span>CLASH</span><strong>01</strong><small>ELITE LEAGUE</small></div></div>
         </section>
 
         {activeTab === 'match' && (
@@ -764,6 +789,7 @@ export default function App() {
               onFinishMatch={handleFinishMatch}
               onResetCurrentMatch={handleResetCurrentMatch}
               onOpenBanPickTab={() => setActiveTab('arena')}
+              onToggleFinal={handleToggleFinal}
             />
 
             {/* Category Selector Grid */}
