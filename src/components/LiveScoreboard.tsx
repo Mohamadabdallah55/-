@@ -6,6 +6,8 @@ import { Plus, Minus, Trophy, CheckCircle2, RotateCcw, Play, Sparkles } from 'lu
 import { sound } from '../utils/audio';
 import { CountUpValue } from './CountUpValue';
 import { EliteTrophy } from './EliteTrophy';
+import { CinematicStage } from './CinematicStage';
+import { TeamCrest } from './TeamCrest';
 
 interface LiveScoreboardProps {
   currentMatch: CurrentMatch;
@@ -142,21 +144,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
       {/* MAIN BROADCAST SCOREBOARD */}
       <div className="relative my-4">
         <section aria-label="مركز المواجهة" className="relative isolate overflow-hidden rounded-sm border border-white/15 bg-[#080d0c] px-3 py-5 sm:px-8 sm:py-12">
-          <div aria-hidden="true" className="absolute inset-0 -z-10 opacity-60" style={{background: `radial-gradient(ellipse at 100% 35%, ${teamA?.color || '#a855f7'}55, transparent 48%), radial-gradient(ellipse at 0% 35%, ${teamB?.color || '#06b6d4'}55, transparent 48%), linear-gradient(160deg,#101918,#080d0c 60%)`}} />
-          <div aria-hidden="true" className="absolute inset-0 -z-10 opacity-[0.08]" style={{backgroundImage:'linear-gradient(120deg,transparent 49%,white 50%,transparent 51%)',backgroundSize:'48px 48px'}} />
-          {/* Found Studio's stadium-scale light structures, translated into original ELITE CLASH geometry. */}
-          <svg aria-hidden="true" viewBox="0 0 1000 460" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full -z-10 pointer-events-none">
-            <defs>
-              <linearGradient id="arena-floor" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#a3e635" stopOpacity=".16"/><stop offset="1" stopColor="#a3e635" stopOpacity="0"/></linearGradient>
-            </defs>
-            <path d="M-100 420 500 230 1100 420M-100 450 500 250 1100 450" fill="none" stroke="url(#arena-floor)" strokeWidth="2"/>
-            <g fill="none" strokeWidth="2" opacity=".45">
-              <path d="M-50 380 180 65 340 65 460 190" stroke={teamB?.color || '#06b6d4'}/>
-              <path d="M1050 380 820 65 660 65 540 190" stroke={teamA?.color || '#a855f7'}/>
-              <path d="M-50 310 150 38 350 38 465 150M1050 310 850 38 650 38 535 150" stroke="#d9f99d" strokeOpacity=".24"/>
-            </g>
-            <path d="M500 110 536 180 500 250 464 180Z" fill="#d9f99d" fillOpacity=".045" stroke="#d9f99d" strokeOpacity=".18"/>
-          </svg>
+          <div className="absolute inset-0 -z-10 opacity-85"><CinematicStage left={teamB?.color} right={teamA?.color} gold={isFinal}/></div>
           <div className="absolute inset-x-0 top-0 h-[3px]" style={{background:'linear-gradient(90deg,transparent,#bef264,transparent)'}}/>
           <div className="mb-6 text-center">
             <span className="font-orbitron text-[10px] sm:text-xs font-bold tracking-[0.25em] text-emerald-300">{isFinal ? "ELITE CLASH / THE GRAND FINAL" : "ELITE CLASH / MATCH CENTER"}</span>
@@ -173,9 +161,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
               const accent = team?.color || (slot === 'A' ? '#a855f7' : '#06b6d4');
               const block = (
                 <motion.div key={team?.id || slot} initial={reducedMotion ? false : {opacity:0, x:slot === 'A' ? 16 : -16}} animate={{opacity:1,x:0}} transition={{duration:0.55,ease:[0.22,1,0.36,1],delay:slot === "A" ? 0 : 0.08}} className="min-w-0 flex flex-col items-center text-center">
-                  <div className="relative grid aspect-square w-[clamp(4rem,15vw,12rem)] place-items-center" style={{color:accent}}><div aria-hidden="true" className="absolute inset-0 rotate-45 border border-current opacity-40"/><div aria-hidden="true" className="absolute inset-[12%] rotate-45 border-2 border-current bg-black/30" style={{boxShadow:`0 0 28px ${accent}45, inset 0 0 20px ${accent}30`}}/>
-                    <GameIcon name={team?.logo || 'shield'} className="relative h-[55%] w-[55%] text-white" />
-                  </div>
+                  <TeamCrest team={team} className="w-[clamp(3.5rem,14vw,11rem)]" />
                   <h3 className="mt-3 break-words w-full font-changa text-sm sm:text-2xl font-black text-white">{team?.name || 'اختر الفريق'}</h3>
                   <p className="text-[10px] sm:text-xs text-slate-300">{team?.shortName || '—'}</p>
                   <div className="mt-3 flex gap-1.5" aria-label="الجولات المحسومة">
@@ -208,8 +194,10 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
           <div className="grid grid-cols-5 gap-2 sm:gap-3">
             {[1, 2, 3, 4, 5].map((roundNum) => {
               const totalRoundsPlayed = currentMatch.teamAScore + currentMatch.teamBScore;
-              const isWonByA = roundNum <= currentMatch.teamAScore;
-              const isWonByB = roundNum > currentMatch.teamAScore && roundNum <= totalRoundsPlayed;
+              const savedRound = currentMatch.rounds?.find(r=>r.round===roundNum);
+              const isWonByA = savedRound?.winnerTeamId === currentMatch.teamAId;
+              const isWonByB = savedRound?.winnerTeamId === currentMatch.teamBId;
+              const unknownWinner = roundNum <= totalRoundsPlayed && !isWonByA && !isWonByB;
               const isCurrent = roundNum === totalRoundsPlayed + 1 && !isMatchDecided;
 
               return (
@@ -240,7 +228,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
                     ) : isCurrent ? (
                       <span className="text-amber-300">جارية 🔴</span>
                     ) : (
-                      <span className="text-slate-600">-</span>
+                      <span className="text-slate-400">{unknownWinner ? "محسومة" : "—"}</span>
                     )}
                   </div>
                 </div>
@@ -268,7 +256,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
                 </span>
               </div>
               <p className="text-xs text-amber-200/70 mt-0.5">
-                تأهل واحتساب 3 نقاط في جدول الترتيب العام لدوري صراع النخبة.
+                {isFinal ? "بانتظار اعتماد نتيجة النهائي وإعلان البطل." : "بانتظار اعتماد النتيجة واحتساب نقاط الأسبوع المحددة."}
               </p>
             </div>
           </div>
@@ -287,7 +275,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
 
         <button
           onClick={onFinishMatch}
-          disabled={currentMatch.teamAScore === 0 && currentMatch.teamBScore === 0}
+          disabled={currentMatch.teamAScore === currentMatch.teamBScore || (isFinal && !isMatchDecided)}
           className={`w-full sm:w-auto px-6 py-3 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2.5 shadow-lg ${
             isMatchDecided
               ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-emerald-600/30 scale-102 ring-2 ring-emerald-400/40'
