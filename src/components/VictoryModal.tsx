@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Team, CurrentMatch } from '../types';
 import { GameIcon } from './GameIcons';
-import { Trophy, X, Camera } from 'lucide-react';
+import { X, Camera } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sound } from '../utils/audio';
 
@@ -59,14 +59,25 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         <motion.div initial={reducedMotion ? false : { opacity:0, y:14 }} animate={{opacity:1,y:0}} transition={{duration:0.4}} className="w-full">
           <p className="font-orbitron text-[10px] sm:text-sm font-bold tracking-[0.3em] text-amber-300">ELITE CLASH / HALL OF VICTORY</p>
           <h1 className="mt-3 font-changa text-3xl sm:text-6xl font-black text-white">{championship ? 'بطل صراع النخبة' : 'لحظة الانتصار'}</h1>
-          <div className="relative mx-auto my-7 flex h-36 w-36 sm:h-56 sm:w-56 items-center justify-center">
-            <div aria-hidden="true" className="absolute inset-0 rounded-full border border-amber-400/25" />
-            <div aria-hidden="true" className="absolute inset-4 rounded-full border border-amber-400/15" />
-            <motion.div initial={reducedMotion ? false : {scale:0.78,opacity:0}} animate={{scale:1,opacity:1}} transition={{duration:0.5,delay:0.12}} className="grid h-24 w-24 sm:h-40 sm:w-40 place-items-center rounded-[30%] border border-amber-200/50 bg-gradient-to-br from-amber-100 via-amber-500 to-amber-950 shadow-[0_16px_55px_#e6a73c40]">
-              <Trophy className="h-16 w-16 sm:h-28 sm:w-28 text-amber-950" strokeWidth={1.4} />
-            </motion.div>
+          {/* Original faceted cup, drawn as vector geometry; no external models or artwork. */}
+          <div className="relative mx-auto my-2 flex h-56 w-full max-w-[450px] sm:h-80 items-center justify-center">
+            <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{background:'conic-gradient(from 150deg at 50% 12%,transparent 0deg,#f8d88a25 16deg,transparent 30deg,transparent 90deg,#f8d88a25 105deg,transparent 120deg)'}}/>
+            <svg aria-hidden="true" viewBox="0 0 360 75" className="absolute bottom-0 w-full max-w-sm"><ellipse cx="180" cy="45" rx="145" ry="24" fill="#000" stroke="#a87c36"/><ellipse cx="180" cy="36" rx="116" ry="18" fill="#171b14" stroke="#e9bc65" strokeOpacity=".65"/></svg>
+            <motion.svg aria-hidden="true" viewBox="0 0 240 280" initial={reducedMotion ? false : {y:35,scale:.9,opacity:0}} animate={{y:0,scale:1,opacity:1}} transition={{duration:.8,ease:[0.22,1,0.36,1]}} className="relative h-[96%] w-auto drop-shadow-[0_15px_25px_#e6b95b40]">
+              <defs>
+                <linearGradient id="ec-metal" x1="0" x2="1"><stop stopColor="#63400f"/><stop offset=".19" stopColor="#efc56b"/><stop offset=".36" stopColor="#fff1bb"/><stop offset=".51" stopColor="#af7929"/><stop offset=".73" stopColor="#f7d88a"/><stop offset="1" stopColor="#57360b"/></linearGradient>
+                <linearGradient id="ec-dark" x1="0" x2="1" y1="0" y2="1"><stop stopColor="#f9db92"/><stop offset="1" stopColor="#77501c"/></linearGradient>
+              </defs>
+              <path d="M55 36 24 30 15 47 28 105 73 135 82 118 47 91 39 52 60 58M185 36 216 30 225 47 212 105 167 135 158 118 193 91 201 52 180 58" fill="url(#ec-metal)" stroke="#ffe4a1" strokeWidth="1"/>
+              <path d="M47 26 193 26 180 115 145 159 132 165 132 208 158 224 158 235 82 235 82 224 108 208 108 165 95 159 60 115Z" fill="url(#ec-metal)" stroke="#f8d98d" strokeWidth="1.5"/>
+              <path d="M47 26 93 52 108 165 95 159 60 115Z" fill="#fff5cf" fillOpacity=".28"/>
+              <path d="M193 26 147 52 132 165 145 159 180 115Z" fill="#352006" fillOpacity=".30"/>
+              <path d="M47 26 120 44 193 26 186 17 54 17Z" fill="#ffe5a6" stroke="#b78232"/>
+              <path d="M120 57 148 90 120 123 92 90Z" fill="#171d15" stroke="#ffdf8c" strokeWidth="2"/><path d="M108 78 132 78 124 90 132 103 108 103 116 90Z" fill="#f2c66c"/>
+              <path d="M82 235H158L180 250V267H60V250Z" fill="url(#ec-dark)" stroke="#e9bb69"/><path d="M60 250H180V267H60Z" fill="#171812" stroke="#d2a252"/><path d="M89 254H151V263H89Z" fill="#d6b36c"/>
+            </motion.svg>
           </div>
-          <div className="mx-auto flex max-w-xl flex-col items-center rounded-3xl border border-white/15 bg-black/25 px-4 py-5 sm:px-8">
+          <motion.div initial={reducedMotion ? false : {opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{duration:.45,delay:reducedMotion?0:.45}} className="mx-auto flex max-w-xl flex-col items-center border-y border-amber-300/35 bg-black/25 px-4 py-5 sm:px-8">
             <span className="grid h-16 w-16 sm:h-20 sm:w-20 place-items-center rounded-2xl border-2" style={{backgroundColor:winnerTeam.color,borderColor:'#ffffff50'}}><GameIcon name={winnerTeam.logo || 'crown'} className="h-10 w-10 text-white" /></span>
             <h2 className="mt-3 break-words max-w-full font-changa text-3xl sm:text-5xl font-black text-white">{winnerTeam.name}</h2>
             {winnerTeam.captain && <p className="mt-1 text-sm text-amber-200">الكابتن: {winnerTeam.captain}</p>}
@@ -76,7 +87,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               </div>
             ) : <p className="mt-4 text-sm text-slate-300">نتيجة المواجهة غير متاحة في أمر الاحتفال.</p>}
             <p className="mt-2 text-xs sm:text-sm text-slate-300">المنافس: {loserTeam.name}</p>
-          </div>
+          </motion.div>
           <div className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-3">
             {canCrown && !championship && <button type="button" onClick={() => { if (window.confirm('هل هذه المباراة هي النهائي الرسمي، وهل تم اعتماد هذا الفريق بطلاً للدوري؟')) setChampionship(true); }} className="rounded-xl border border-amber-400/60 bg-amber-950/40 px-5 py-3 font-changa font-bold text-amber-200">عرض تتويج بطل الدوري</button>}
             {championship && <button type="button" onClick={()=>setChampionship(false)} className="rounded-xl border border-white/20 px-5 py-3 font-changa text-sm">العودة إلى احتفال المواجهة</button>}
