@@ -136,7 +136,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
   ];
 
   return (
-    <div ref={broadcastRootRef} className="broadcast-screen fixed inset-0 z-50 bg-[#050814] text-white flex flex-col justify-between p-4 md:p-8 select-none overflow-y-auto">
+    <div ref={broadcastRootRef} className={`broadcast-screen ce-broadcast-canvas ce-broadcast-${broadcastView} fixed inset-0 z-50 bg-[#050814] text-white flex flex-col select-none overflow-y-auto`}>
       {/* Top TV Header Bar */}
       <div className="broadcast-topbar flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-3">
@@ -198,10 +198,10 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
 
       {/* VIEW 1: SCOREBOARD VIEW */}
       {broadcastView === 'scoreboard' && (
-        <div className="broadcast-scoreboard my-auto max-w-5xl mx-auto w-full space-y-6 animate-fade-in">
+        <div className="broadcast-scoreboard ce-scoreboard-canvas">
           {/* Active Game Spotlight */}
           {activeGame && (
-            <div className="text-center animate-fade-in">
+            <div className="ce-active-game text-center animate-fade-in">
               <span className="text-xs uppercase tracking-widest text-cyan-400 font-mono bg-cyan-950/70 border border-cyan-800/80 px-4 py-1 rounded-full">
                 {activeCategory?.nameAr} · {activeGame.nameEn}
               </span>
@@ -212,20 +212,20 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
             </div>
           )}
 
-          <section className="relative isolate overflow-hidden border bg-[#080e0c] px-2 py-6 sm:px-8 sm:py-10" style={{borderColor:isFinal?'#d8b66b88':'#c5ed5a44'}}>
+          <section className="ce-live-stage relative isolate overflow-hidden border bg-[#080e0c]" style={{borderColor:isFinal?'#d8b66b88':'#c5ed5a44'}}>
             <div className="absolute inset-0 -z-10"><CinematicStage left={teamB?.color} right={teamA?.color} gold={isFinal}/></div>
-            <div className="mb-6 text-center"><p className="font-orbitron text-xs sm:text-lg font-black tracking-[.2em]" style={{color:isFinal?'#f5d58b':'#d3f189'}}>{isFinal?'THE GRAND FINAL':'CLASH OF ELITES'}</p><h2 className="mt-1 text-xl sm:text-4xl font-changa font-black">{isFinal?'المباراة النهائية':'مركز المواجهة'}</h2></div>
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-6" dir="rtl">
-              {([teamA,teamB] as const).map((team,i)=><React.Fragment key={i}>{i===1&&<div className="text-center">
-                {isFinal&&<EliteTrophy className="mx-auto mb-1 h-16 w-14 sm:h-28 sm:w-24"/>}
-                <div className="flex items-center justify-center gap-2 sm:gap-4 text-4xl sm:text-7xl md:text-8xl font-black font-orbitron tabular-nums" dir="rtl"><span>{currentMatch.teamAScore}</span><span className="text-slate-400">:</span><span>{currentMatch.teamBScore}</span></div>
-                <p className="mt-3 font-orbitron text-[10px] sm:text-xs text-amber-200">BEST OF 5</p>
-              </div>}<div className="min-w-0 flex flex-col items-center text-center"><TeamCrest team={team} className="w-[clamp(3.6rem,17vw,12rem)]"/><h3 className="mt-2 break-words max-w-full font-changa text-sm sm:text-3xl font-black">{team?.name||'—'}</h3></div></React.Fragment>)}
+            <div className="ce-live-heading text-center"><p className="font-orbitron text-xs sm:text-lg font-black tracking-[.2em]" style={{color:isFinal?'#f5d58b':'#d3f189'}}>{isFinal?'THE GRAND FINAL':'CLASH OF ELITES'}</p><h2 className="mt-1 text-xl sm:text-4xl font-changa font-black">{isFinal?'المباراة النهائية':'مركز المواجهة'}</h2></div>
+            <div className="ce-live-match-grid" dir="rtl">
+              {([teamA,teamB] as const).map((team,i)=><React.Fragment key={i}>{i===1&&<div className="ce-live-score-center text-center">
+                {isFinal&&<EliteTrophy className="ce-live-cup"/>}
+                <div className="ce-live-digits font-black font-orbitron tabular-nums" dir="rtl"><span>{currentMatch.teamAScore}</span><span className="text-slate-400">:</span><span>{currentMatch.teamBScore}</span></div>
+                <p className="ce-live-best font-orbitron text-amber-200">BEST OF 5</p>
+              </div>}<div className="ce-live-team min-w-0 flex flex-col items-center text-center"><TeamCrest team={team} className="ce-live-crest"/><h3 className="ce-live-team-name break-words max-w-full font-changa font-black">{team?.name||'—'}</h3>{team?.captain&&<p className="ce-live-captain">{team.captain.replace(/\s+C$/,"")}</p>}</div></React.Fragment>)}
             </div>
           </section>
 
           {/* Best of 5 Rounds Track */}
-          <div className="broadcast-round-track flex items-center justify-center gap-2 md:gap-3">
+          <div className="broadcast-round-track ce-live-rounds">
             {[1, 2, 3, 4, 5].map((roundNum) => {
               const totalRoundsPlayed = currentMatch.teamAScore + currentMatch.teamBScore;
               const savedRound = currentMatch.rounds?.find(r=>r.round===roundNum);
@@ -236,6 +236,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
               return (
                 <div
                   key={roundNum}
+                  style={isWonByA||isWonByB?{backgroundColor:(isWonByA?teamA:teamB)?.color,borderColor:(isWonByA?teamA:teamB)?.color}:undefined}
                   className={`px-3 md:px-5 py-1.5 md:py-2 rounded-xl text-xs md:text-sm font-bold font-changa flex items-center gap-2 ${
                     isWonByA
                       ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/50'
@@ -246,7 +247,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
                       : 'bg-slate-900/90 text-slate-600 border border-slate-800'
                   }`}
                 >
-                  <span>الجولة {roundNum}{roundNum<=totalRoundsPlayed&&!isWonByA&&!isWonByB?' · محسومة':''}</span>
+                  <span>الجولة {roundNum}</span><strong>{isWonByA?teamA?.shortName:isWonByB?teamB?.shortName:isCurrent?'جارية':roundNum<=totalRoundsPlayed?'محسومة':'—'}</strong>
                 </div>
               );
             })}
