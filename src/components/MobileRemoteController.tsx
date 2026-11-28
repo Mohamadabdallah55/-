@@ -2471,6 +2471,9 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               </button>
             </div>
 
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+              {([{view:'welcome',label:'ترحيب الجمهور'},{view:'finalists',label:'إعلان طرفي النهائي'}] as const).map(item=><button key={item.view} onClick={()=>{triggerHaptic(20);broadcastMessage('BROADCAST_VIEW_UPDATED',item.view);broadcastMessage('SWITCH_TAB_COMMAND','broadcast');showFeedback('شاشة العرض: '+item.label);}} className="py-3 px-2 rounded-xl border border-amber-500/60 bg-amber-950/60 text-amber-200 font-bold text-xs">{item.label}</button>)}
+            </div>
             {/* Open Specific Modals on Laptop */}
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
               <button
