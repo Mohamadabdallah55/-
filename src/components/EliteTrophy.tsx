@@ -1,8 +1,13 @@
-import React, { useId } from 'react';
+import React, { useId, useState } from 'react';
+// Optional local generated artwork: src/assets/elite-trophy.webp. Vector fallback is always available.
+const artwork = import.meta.glob('../assets/elite-trophy.webp',{eager:true,query:'?url',import:'default'}) as Record<string,string>;
+const trophyArtwork = artwork['../assets/elite-trophy.webp'];
 /** Original reusable, faceted tournament trophy; independently composited in each scene. */
 export function EliteTrophy({className = ''}: {className?: string}) {
  const uid = useId();
  const metal = uid + '-metal', dark = uid + '-dark';
+ const [imageFailed,setImageFailed] = useState(false);
+ if(trophyArtwork && !imageFailed) return <img src={trophyArtwork} onError={()=>setImageFailed(true)} alt="كأس صراع النخبة" className={className+' object-contain'} decoding="async" />;
  return <svg viewBox="0 0 240 280" role="img" aria-label="كأس صراع النخبة" className={className}>
  <defs>
                 <linearGradient id={metal} x1="0" x2="1"><stop stopColor="#63400f"/><stop offset=".19" stopColor="#efc56b"/><stop offset=".36" stopColor="#fff1bb"/><stop offset=".51" stopColor="#af7929"/><stop offset=".73" stopColor="#f7d88a"/><stop offset="1" stopColor="#57360b"/></linearGradient>
