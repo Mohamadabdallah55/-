@@ -29,6 +29,7 @@ interface HeaderProps {
   onOpenMobileConnectModal?: () => void;
   onToggleStageView?: () => void;
   onOpenHotkeys?: () => void;
+  onReplayIntro?: () => void;
   canInstallPwa?: boolean;
   onInstallPwa?: () => void;
 }
@@ -50,6 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobileConnectModal,
   onToggleStageView,
   onOpenHotkeys,
+  onReplayIntro,
   canInstallPwa,
   onInstallPwa,
 }) => {
@@ -120,6 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
           {onOpenSettingsModal && <button onClick={onOpenSettingsModal}><Settings2 /><span>إعدادات الدوري</span></button>}
           <button onClick={onOpenMobileConnectModal}><Smartphone /><span>ربط الهاتف</span></button>
           {onToggleStageView && <button onClick={onToggleStageView}><Tv /><span>وضع المسرح</span></button>}
+          {onReplayIntro && <button type="button" onClick={onReplayIntro}><MonitorPlay/><span>إعادة الافتتاحية</span></button>}
           {onOpenHotkeys && <button onClick={onOpenHotkeys}><Keyboard /><span>اختصارات</span></button>}
           <button onClick={openStandaloneTimer}><ExternalLink /><span>مؤقت منفصل</span></button>
           {canInstallPwa && onInstallPwa && <button onClick={onInstallPwa}><Download /><span>تثبيت التطبيق</span></button>}
