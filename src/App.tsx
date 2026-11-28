@@ -53,6 +53,7 @@ import { MobileConnectModal } from './components/MobileConnectModal';
 import { ArenaStageView } from './components/ArenaStageView';
 import { VictoryModal } from './components/VictoryModal';
 import { CinematicIntro } from './components/CinematicIntro';
+import { applyRoundScore, isCertifiedFinal } from './utils/matchRules';
 import { HotkeysModal } from './components/HotkeysModal';
 import { SpotlightCard } from './components/SpotlightCard';
 import { CountUpValue } from './components/CountUpValue';
@@ -320,27 +321,10 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  // Handle Score Updates (+ / -)
+  // Handle score updates with one shared, testable set of rules.
   const handleUpdateScore = (teamSlot: 'A' | 'B', delta: number) => {
-    if (delta > 0 && Math.max(currentMatch.teamAScore, currentMatch.teamBScore) >= 3) return;
-    const nextMatch = { ...currentMatch, rounds: [...(currentMatch.rounds || [])] };
-    const scoreKey = teamSlot === 'A' ? 'teamAScore' : 'teamBScore';
-    const teamId = teamSlot === 'A' ? currentMatch.teamAId : currentMatch.teamBId;
-    const oldScore = nextMatch[scoreKey];
-    nextMatch[scoreKey] = Math.max(0, Math.min(3, oldScore + delta));
-    if (nextMatch[scoreKey] === oldScore) return;
-    const priorTotal = currentMatch.teamAScore + currentMatch.teamBScore;
-    const completeRoundHistory = nextMatch.rounds.length === priorTotal && nextMatch.rounds.every(r => r.winnerTeamId === currentMatch.teamAId || r.winnerTeamId === currentMatch.teamBId);
-    if (completeRoundHistory && delta === 1) {
-      nextMatch.rounds.push({round: priorTotal + 1, winnerTeamId:teamId, gameId: currentMatch.activeGameId || undefined, gameName: games.find(g=>g.id===currentMatch.activeGameId)?.nameAr});
-    } else if (completeRoundHistory && delta === -1) {
-      const last = nextMatch.rounds.map(r=>r.winnerTeamId).lastIndexOf(teamId);
-      if (last >= 0) nextMatch.rounds.splice(last,1);
-      nextMatch.rounds = nextMatch.rounds.map((r,i)=>({...r,round:i+1}));
-    } else {
-      nextMatch.rounds = []; // never infer the chronological winners of an old aggregate score
-    }
-    nextMatch.currentRound = Math.min(5,nextMatch.teamAScore + nextMatch.teamBScore + 1);
+    const nextMatch = applyRoundScore(currentMatch, teamSlot, delta, games);
+    if (nextMatch === currentMatch) return;
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
@@ -742,7 +726,7 @@ export default function App() {
     );
   }
 
-  const finalRecord = [...matchesHistory].filter(m=>m.stage==='final' && Math.max(m.teamAScore,m.teamBScore)===3 && m.teamAScore!==m.teamBScore).sort((a,b)=>b.timestamp-a.timestamp)[0];
+  const finalRecord = [...matchesHistory].filter(isCertifiedFinal).sort((a,b)=>b.timestamp-a.timestamp)[0];
   const replayFinal = () => {
     if (!finalRecord) return;
     const winner=teams.find(t=>t.id===finalRecord.winnerId), loser=teams.find(t=>t.id===finalRecord.loserId);
