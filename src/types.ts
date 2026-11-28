@@ -101,6 +101,7 @@ export interface GameItem {
 export interface CardState {
   gameId: string;
   status: BanPickStatus;
+  pickedBy?: 'a' | 'b';
   order?: number;
 }
 
