@@ -86,6 +86,8 @@ export default function App() {
   // Check if opened as standalone window via URL hash #standalone-timer or #remote / /remote / ?mode=remote
   const [isStandaloneTimer, setIsStandaloneTimer] = useState<boolean>(false);
   const [introOpen, setIntroOpen] = useState(false);
+  const [introRun,setIntroRun]=useState(0);
+  const replayIntro=useCallback(()=>{setIntroRun(n=>n+1);setIntroOpen(true);},[]);
   const closeIntro = useCallback(() => setIntroOpen(false), []);
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -239,6 +241,7 @@ export default function App() {
       }
       if (type === 'OPEN_MODAL_COMMAND') {
         const modal = payload as string;
+        if(modal==='intro'){replayIntro();return;}
         setIsTeamsModalOpen(modal === 'teams');
         setIsHistoryModalOpen(modal === 'history');
         setIsLeagueSettingsOpen(modal === 'settings');
@@ -743,7 +746,7 @@ export default function App() {
         isScreenShaking ? 'animate-screen-shake' : ''
       }`}
     >
-      {introOpen && <CinematicIntro teams={teams} onClose={closeIntro} />}
+      {introOpen && <CinematicIntro key={introRun} teams={teams} onClose={closeIntro} />}
       {/* Top Bar Navigation */}
       <Header
         activeTab={activeTab}
@@ -754,6 +757,7 @@ export default function App() {
         onOpenMobileConnectModal={() => setIsMobileConnectModalOpen(true)}
         onToggleStageView={() => setIsStageViewOpen(true)}
         onOpenHotkeys={() => setIsHotkeysModalOpen(true)}
+        onReplayIntro={replayIntro}
         canInstallPwa={Boolean(deferredPwaPrompt)}
         onInstallPwa={handleInstallPwa}
       />
@@ -772,7 +776,7 @@ export default function App() {
             <h1>{page.title}</h1>
             <p>{page.description}</p>
           </div>
-          <div className="flex items-center gap-3"><button type="button" onClick={() => setIntroOpen(true)} className="rounded-lg border border-lime-300/30 px-3 py-2 text-xs font-bold text-lime-200">إعادة الافتتاحية</button><div className="page-heading-stamp"><span>CLASH</span><strong>01</strong><small>ELITE LEAGUE</small></div></div>
+          <div className="flex items-center gap-3"><button type="button" onClick={replayIntro} className="relative z-10 pointer-events-auto cursor-pointer rounded-lg border border-lime-300/60 bg-lime-950 px-4 py-3 text-sm font-bold text-lime-200">إعادة الافتتاحية</button><div className="page-heading-stamp"><span>CLASH</span><strong>01</strong><small>ELITE LEAGUE</small></div></div>
         </section>
 
         {activeTab === 'match' && (
@@ -900,6 +904,7 @@ export default function App() {
             arenaColumnGames={arenaColumnGames}
             initialView={broadcastView}
             onViewChange={setBroadcastView}
+            onReplayIntro={replayIntro}
             onClose={() => setActiveTab('match')}
           />
         )}
