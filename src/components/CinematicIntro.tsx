@@ -9,7 +9,7 @@ import { FinalPresentation } from './FinalPresentation';
 export function CinematicIntro({teams,onClose}:{teams:Team[];onClose:()=>void}) {
  const reduced = useReducedMotion();
  const [scene,setScene]=useState(0);
- const durations=[3500,6500,8000];
+ const durations=[3500,6500,6000];
  useEffect(()=>{const timer=window.setTimeout(()=>{if(scene<2)setScene(scene+1);else onClose();},durations[scene]);return()=>window.clearTimeout(timer)},[scene,onClose]);
  useEffect(()=>{const listener=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};window.addEventListener('keydown',listener);return()=>window.removeEventListener('keydown',listener)},[onClose]);
 
