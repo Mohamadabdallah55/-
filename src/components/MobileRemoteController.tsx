@@ -399,7 +399,6 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
     const chosen = targetPool[Math.floor(Math.random() * targetPool.length)];
     sound.playPick('pick');
     onSetCardStatus(chosen.id, 'current');
-    onSetActiveGame(chosen.id);
     showFeedback(`🎲 القرعة اختارت: ${chosen.nameAr}`);
   };
 
@@ -1548,13 +1547,13 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
                       {isCurrent ? (
                         <span className="text-amber-300">اللعبة الحالية</span>
                       ) : isBannedA ? (
-                        <span className="text-purple-300">حظر {teamA.shortName} ✕</span>
+                        <span style={{color:teamA.color}}>حظر بواسطة {teamA.shortName} ✕</span>
                       ) : isBannedB ? (
-                        <span className="text-cyan-300">حظر {teamB.shortName} ✕</span>
+                        <span style={{color:teamB.color}}>حظر بواسطة {teamB.shortName} ✕</span>
                       ) : isPickedA ? (
-                        <span className="text-purple-300">اختيار {teamA.shortName} ✓</span>
+                        <span className="text-purple-300">اختيار بواسطة {teamA.shortName} ✓</span>
                       ) : isPickedB ? (
-                        <span className="text-cyan-300">اختيار {teamB.shortName} ✓</span>
+                        <span className="text-cyan-300">اختيار بواسطة {teamB.shortName} ✓</span>
                       ) : (
                         <span className="text-slate-400">متاحة</span>
                       )}
@@ -1568,7 +1567,6 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
                         triggerHaptic(30);
                         sound.playPick('pick');
                         onSetCardStatus(game.id, 'current');
-                        onSetActiveGame(game.id);
                         showFeedback(`تم تعيين «${game.nameAr}» كلعبة الجولة الحالية`);
                       }}
                       className={`py-2 px-2.5 rounded-xl font-bold font-changa text-xs flex items-center justify-center gap-1.5 ${
@@ -1635,7 +1633,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
                       className="py-2 px-1 rounded-xl bg-purple-950/90 border border-purple-500/60 text-purple-200 flex items-center justify-center gap-1 active:scale-95"
                     >
                       <Check className="w-3 h-3" />
-                      <span>اختيار {teamA.shortName}</span>
+                      <span>اختيار بواسطة {teamA.shortName}</span>
                     </button>
 
                     <button
@@ -1648,7 +1646,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
                       className="py-2 px-1 rounded-xl bg-purple-950/50 border border-purple-800 text-purple-300 flex items-center justify-center gap-1 active:scale-95"
                     >
                       <Ban className="w-3 h-3" />
-                      <span>حظر {teamA.shortName}</span>
+                      <span>حظر بواسطة {teamA.shortName}</span>
                     </button>
 
                     <button
@@ -1661,7 +1659,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
                       className="py-2 px-1 rounded-xl bg-cyan-950/90 border border-cyan-500/60 text-cyan-200 flex items-center justify-center gap-1 active:scale-95"
                     >
                       <Check className="w-3 h-3" />
-                      <span>اختيار {teamB.shortName}</span>
+                      <span>اختيار بواسطة {teamB.shortName}</span>
                     </button>
 
                     <button
@@ -1674,7 +1672,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
                       className="py-2 px-1 rounded-xl bg-cyan-950/50 border border-cyan-800 text-cyan-300 flex items-center justify-center gap-1 active:scale-95"
                     >
                       <Ban className="w-3 h-3" />
-                      <span>حظر {teamB.shortName}</span>
+                      <span>حظر بواسطة {teamB.shortName}</span>
                     </button>
                   </div>
 
