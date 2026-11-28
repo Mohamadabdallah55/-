@@ -268,8 +268,8 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
                   const picked=state==='picked_team_a'||state==='picked_team_b';
                   const team=state.endsWith('team_a')?teamA:state.endsWith('team_b')?teamB:undefined;
                   const completed=state==='completed';
-                  const label=current?'الجارية الآن':banned?'حظر '+(team?.shortName||''):picked?'اختيار '+(team?.shortName||''):completed?'انتهت':'متاحة';
-                  const stateColor=current?'#f9da86':banned?'#ff7a84':picked?(team?.color||col.headerColor):completed?'#a8b7ae':col.headerColor;
+                  const label=current?'الجارية الآن':banned?'حظر بواسطة '+(team?.name||''):picked?'اختارها '+(team?.name||''):completed?'انتهت':'متاحة';
+                  const stateColor=current?'#f9da86':banned?(team?.color||'#ff7a84'):picked?(team?.color||col.headerColor):completed?'#a8b7ae':col.headerColor;
                   return <article key={game.id} className={'ce-game-tile '+(current?'ce-game-current':banned?'ce-game-banned':picked?'ce-game-picked':completed?'ce-game-completed':'')} style={{'--status':stateColor} as React.CSSProperties}>
                     <div className="ce-game-art">{game.customImage?<img src={game.customImage} alt="" onError={e=>{e.currentTarget.style.display='none';}}/>:<GameIcon name={game.iconType} className="ce-game-icon"/>}</div>
                     <h4>{game.nameAr}</h4><div className="ce-game-state">{banned&&!current?<Ban/>:picked||completed?<Check/>:current?<Flame/>:<i/>}<span>{label}</span></div>
