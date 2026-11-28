@@ -281,7 +281,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
                   const stateColor=banned?'#ff525e':current?'#f9da86':picked?(team?.color||col.headerColor):completed?'#a8b7ae':col.headerColor;
                   return <article key={game.id} className={'ce-game-tile '+(current?'ce-game-current':banned?'ce-game-banned':picked?'ce-game-picked':completed?'ce-game-completed':'')} style={{'--status':stateColor,'--actor':team?.color||stateColor} as React.CSSProperties}>
                     <div className="ce-game-art"><GameIcon name={game.iconType} className="ce-game-icon"/>{game.customImage&&<img src={game.customImage} alt="" onError={e=>{e.currentTarget.style.display='none';}}/>}{banned&&<X className="ce-ban-mark" aria-hidden="true"/>}{picked&&<Check className="ce-pick-mark" aria-hidden="true"/>}</div>
-                    <h4>{game.nameAr}</h4><div className="ce-game-state"><span>{label}</span>{team&&<span className="ce-game-actor" title={team.name}>{banned?'حظر ': 'اختيار '}{team.shortName||team.name}</span>}{!team&&current&&<Flame/>}</div>
+                    <h4>{game.nameAr}</h4><div className="ce-game-state"><span>{label}</span>{team&&<span className="ce-game-actor" title={team.name}>{banned?'بواسطة ':current||completed?'اختارها ': 'بواسطة '}{team.name}</span>}{!team&&current&&<Flame/>}</div>
                   </article>;
                 })}</div>
               </section>;
