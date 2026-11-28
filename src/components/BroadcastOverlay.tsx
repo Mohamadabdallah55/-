@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { CurrentMatch, Team, GameItem, LeagueRow, CategoryInfo, BanPickStatus } from '../types';
+import { CurrentMatch, Team, GameItem, LeagueRow, CategoryInfo, CardState } from '../types';
 import { DEFAULT_GAMES } from '../data/defaultGames';
 import { GameIcon } from './GameIcons';
 import { BrandMark } from './BrandMark';
@@ -16,7 +16,7 @@ import {
   Sparkles,
   Swords,
   Layers,
-  Ban,
+  X,
   Check,
   Flame,
 } from 'lucide-react';
@@ -27,7 +27,7 @@ interface BroadcastOverlayProps {
   games: GameItem[];
   standings: LeagueRow[];
   categories: CategoryInfo[];
-  cardStates?: Record<string, { gameId: string; status: BanPickStatus }>;
+  cardStates?: Record<string, CardState>;
   arenaColumnGames?: Record<string, string[]>;
   initialView?: 'scoreboard' | 'games';
   onViewChange?: (view: 'scoreboard' | 'games') => void;
@@ -50,6 +50,9 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [broadcastView, setBroadcastView] = useState<'scoreboard' | 'games'>(initialView);
+  const [scorePulse,setScorePulse]=useState<'a'|'b'|null>(null);
+  const priorScore=useRef({a:currentMatch.teamAScore,b:currentMatch.teamBScore,match:currentMatch.teamAId+':'+currentMatch.teamBId});
+  useEffect(()=>{const old=priorScore.current,match=currentMatch.teamAId+':'+currentMatch.teamBId;priorScore.current={a:currentMatch.teamAScore,b:currentMatch.teamBScore,match};const side=old.match!==match?null:currentMatch.teamAScore>old.a?'a':currentMatch.teamBScore>old.b?'b':null;setScorePulse(side);if(side){const timeout=window.setTimeout(()=>setScorePulse(null),650);return()=>window.clearTimeout(timeout)}},[currentMatch.teamAScore,currentMatch.teamBScore,currentMatch.teamAId,currentMatch.teamBId]);
   const broadcastRootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -136,7 +139,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
   ];
 
   return (
-    <div ref={broadcastRootRef} className={`broadcast-screen ce-broadcast-canvas ce-broadcast-${broadcastView} fixed inset-0 z-50 bg-[#050814] text-white flex flex-col select-none overflow-y-auto`}>
+    <div ref={broadcastRootRef} className={`broadcast-screen ce-broadcast-canvas ce-broadcast-${broadcastView} ${isFinal?'ce-broadcast-final':''} fixed inset-0 z-50 bg-[#050814] text-white flex flex-col select-none overflow-y-auto`}>
       {/* Top TV Header Bar */}
       <div className="broadcast-topbar flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-3">
@@ -220,7 +223,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
                 {isFinal&&<EliteTrophy className="ce-live-cup"/>}
                 <div className="ce-live-digits font-black font-orbitron tabular-nums" dir="rtl"><span>{currentMatch.teamAScore}</span><span className="text-slate-400">:</span><span>{currentMatch.teamBScore}</span></div>
                 <p className="ce-live-best font-orbitron text-amber-200">BEST OF 5</p>
-              </div>}<div className="ce-live-team min-w-0 flex flex-col items-center text-center"><TeamCrest team={team} className="ce-live-crest"/><h3 className="ce-live-team-name break-words max-w-full font-changa font-black">{team?.name||'—'}</h3>{team?.captain&&<p className="ce-live-captain">{team.captain.replace(/\s+C$/,"")}</p>}</div></React.Fragment>)}
+              </div>}<div className={`ce-live-team min-w-0 flex flex-col items-center text-center ${scorePulse===(i===0?'a':'b')?'ce-team-score-pulse':''}`}><TeamCrest team={team} className="ce-live-crest"/><h3 className="ce-live-team-name break-words max-w-full font-changa font-black">{team?.name||'—'}</h3>{team?.captain&&<p className="ce-live-captain">{team.captain.replace(/\s+C$/,"")}</p>}</div></React.Fragment>)}
             </div>
           </section>
 
@@ -266,17 +269,19 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
               return <section key={col.catId} className="ce-games-column" style={{'--cat':col.headerColor} as React.CSSProperties}>
                 <header className="ce-games-category"><span>{col.label}</span><h3>{col.subLabel}</h3></header>
                 <div className="ce-games-stack">{colGames.map(game=>{
-                  const state=cardStates[game.id]?.status||'available';
+                  const card=cardStates[game.id];
+                  const state=card?.status||'available';
                   const current=currentMatch.activeGameId===game.id||state==='current';
                   const banned=state==='banned_team_a'||state==='banned_team_b';
                   const picked=state==='picked_team_a'||state==='picked_team_b';
-                  const team=state.endsWith('team_a')?teamA:state.endsWith('team_b')?teamB:undefined;
+                  const actorSide=state.endsWith('team_a')?'a':state.endsWith('team_b')?'b':card?.pickedBy;
+                  const team=actorSide==='a'?teamA:actorSide==='b'?teamB:undefined;
                   const completed=state==='completed';
-                  const label=current?'الجارية الآن':banned?'حظر بواسطة '+(team?.name||''):picked?'اختارها '+(team?.name||''):completed?'انتهت':'متاحة';
-                  const stateColor=current?'#f9da86':banned?(team?.color||'#ff7a84'):picked?(team?.color||col.headerColor):completed?'#a8b7ae':col.headerColor;
-                  return <article key={game.id} className={'ce-game-tile '+(current?'ce-game-current':banned?'ce-game-banned':picked?'ce-game-picked':completed?'ce-game-completed':'')} style={{'--status':stateColor} as React.CSSProperties}>
-                    <div className="ce-game-art">{game.customImage?<img src={game.customImage} alt="" onError={e=>{e.currentTarget.style.display='none';}}/>:<GameIcon name={game.iconType} className="ce-game-icon"/>}</div>
-                    <h4>{game.nameAr}</h4><div className="ce-game-state">{banned&&!current?<Ban/>:picked||completed?<Check/>:current?<Flame/>:<i/>}<span>{label}</span></div>
+                  const label=banned?'حظر':current?'جارية الآن':completed?'انتهت':picked?'اختيار':'متاحة';
+                  const stateColor=banned?'#ff525e':current?'#f9da86':picked?(team?.color||col.headerColor):completed?'#a8b7ae':col.headerColor;
+                  return <article key={game.id} className={'ce-game-tile '+(current?'ce-game-current':banned?'ce-game-banned':picked?'ce-game-picked':completed?'ce-game-completed':'')} style={{'--status':stateColor,'--actor':team?.color||stateColor} as React.CSSProperties}>
+                    <div className="ce-game-art"><GameIcon name={game.iconType} className="ce-game-icon"/>{game.customImage&&<img src={game.customImage} alt="" onError={e=>{e.currentTarget.style.display='none';}}/>}{banned&&<X className="ce-ban-mark" aria-hidden="true"/>}{picked&&<Check className="ce-pick-mark" aria-hidden="true"/>}</div>
+                    <h4>{game.nameAr}</h4><div className="ce-game-state"><span>{label}</span>{team&&<span className="ce-game-actor" title={team.name}>{banned?'حظر ': 'اختيار '}{team.shortName||team.name}</span>}{!team&&current&&<Flame/>}</div>
                   </article>;
                 })}</div>
               </section>;
@@ -286,7 +291,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
       )}
 
       {/* Bottom Leaderboard Strip */}
-      <div className={broadcastView==='games'?'ce-games-rankstrip':'broadcast-leaderboard bg-[#0C1226]/80 rounded-2xl p-3 border border-slate-800/80 mt-4'}>
+      {!(isFinal||broadcastView==='games')&&<div className="broadcast-leaderboard bg-[#0C1226]/80 rounded-2xl p-3 border border-slate-800/80 mt-4">
         <div className="text-[11px] text-slate-400 font-semibold mb-1.5 flex items-center gap-1.5">
           <Trophy className="w-3 h-3 text-amber-400" />
           <span>ترتيب دوري صراع النخبة المباشر:</span>
@@ -305,7 +310,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
             </div>
           ))}
         </div>
-      </div>
+      </div>}
     </div>
   );
 };
