@@ -6,6 +6,7 @@ import { BrandMark } from './BrandMark';
 import { CinematicStage } from './CinematicStage';
 import { TeamCrest } from './TeamCrest';
 import { EliteTrophy } from './EliteTrophy';
+import './BigScreen.css';
 import { subscribeToBroadcast, DEFAULT_ARENA_COLUMN_GAMES } from '../utils/storage';
 import { revealWithGsap } from '../utils/gsapMotion';
 import {
@@ -55,7 +56,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
 
   useLayoutEffect(() => revealWithGsap(
     broadcastRootRef.current,
-    broadcastView === 'games' ? '.broadcast-column' : '.broadcast-match-card, .broadcast-round-track',
+    broadcastView === 'games' ? '.ce-games-column' : '.broadcast-round-track',
     { y: 26, stagger: broadcastView === 'games' ? 0.09 : 0.14, duration: 0.78 },
   ), [broadcastView]);
 
@@ -151,7 +152,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
         {/* View Switcher: Scoreboard vs Games Grid */}
         <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 shadow-md">
           <button
-            onClick={() => setBroadcastView('scoreboard')}
+            onClick={() => {setBroadcastView('scoreboard');onViewChange?.('scoreboard');}}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold font-changa text-xs transition-all ${
               broadcastView === 'scoreboard'
                 ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md border border-purple-400'
@@ -163,7 +164,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
           </button>
 
           <button
-            onClick={() => setBroadcastView('games')}
+            onClick={() => {setBroadcastView('games');onViewChange?.('games');}}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold font-changa text-xs transition-all ${
               broadcastView === 'games'
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md border border-cyan-400'
@@ -250,137 +251,38 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
         </div>
       )}
 
-      {/* VIEW 2: ARENA GAMES GRID VIEW (BAN & PICK STAGE ON BROADCAST) */}
       {broadcastView === 'games' && (
-        <div className="broadcast-games-view my-auto max-w-7xl mx-auto w-full py-2 animate-fade-in">
-          <div className="broadcast-columns grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {arenaColumns.map((col) => {
-              let configuredKeys =
-                arenaColumnGames[col.catId] ||
-                DEFAULT_ARENA_COLUMN_GAMES[col.catId] ||
-                [];
-
-              let colGames = configuredKeys
-                .map((key) => games.find((g) => g.id === key) || DEFAULT_GAMES.find((g) => g.id === key))
-                .filter(Boolean) as GameItem[];
-
-              if (colGames.length < 3) {
-                const fallbackPool = DEFAULT_GAMES.filter((g) => g.categoryId === col.catId);
-                const extra = fallbackPool
-                  .filter((g) => !colGames.some((cg) => cg.id === g.id))
-                  .slice(0, 3 - colGames.length);
-                colGames = [...colGames, ...extra];
-              }
-
-              return (
-                <div
-                  key={col.catId}
-                  className="broadcast-column rounded-2xl bg-[#090D24]/90 border border-slate-800 p-2.5 flex flex-col justify-between shadow-xl relative overflow-hidden"
-                >
-                  {/* Category Header */}
-                  <div
-                    className="broadcast-column-heading p-2 rounded-xl text-center mb-3 border"
-                    style={{
-                      borderColor: `${col.headerColor}60`,
-                      background: `linear-gradient(180deg, ${col.headerColor}25 0%, rgba(10,13,36,0.8) 100%)`,
-                    }}
-                  >
-                    <span className="text-[10px] font-orbitron font-extrabold tracking-wider block" style={{ color: col.headerColor }}>
-                      {col.label}
-                    </span>
-                    <h3 className="font-changa font-bold text-sm text-white">
-                      {col.subLabel}
-                    </h3>
-                  </div>
-
-                  {/* 3 Games Stack */}
-                  <div className="space-y-2.5">
-                    {colGames.map((game) => {
-                      const state = cardStates[game.id]?.status || 'available';
-                      const isCurrent = currentMatch.activeGameId === game.id;
-                      const isBannedA = state === 'banned_team_a';
-                      const isBannedB = state === 'banned_team_b';
-                      const isPickedA = state === 'picked_team_a';
-                      const isPickedB = state === 'picked_team_b';
-
-                      return (
-                        <div
-                          key={game.id}
-                          className={`broadcast-game-row p-2.5 rounded-xl border transition-all relative ${
-                            isCurrent
-                              ? 'bg-cyan-950/80 border-cyan-400 shadow-[0_0_25px_rgba(6,182,212,0.5)] ring-2 ring-cyan-400'
-                              : isBannedA || isBannedB
-                              ? 'bg-rose-950/30 border-rose-900/80 opacity-70'
-                              : isPickedA
-                              ? 'bg-purple-950/60 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
-                              : isPickedB
-                              ? 'bg-cyan-950/60 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
-                              : 'bg-slate-900/70 border-slate-800'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                              <GameIcon name={game.iconType} className="w-4 h-4 text-amber-300" />
-                            </div>
-                            <div className="truncate">
-                              <h4 className="font-changa font-bold text-xs text-white truncate">
-                                {game.nameAr}
-                              </h4>
-                              <span className="text-[9px] text-slate-400 font-mono block truncate">
-                                {game.nameEn}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Overlay Badges for Broadcast */}
-                          {isCurrent && (
-                            <div className="mt-1.5 text-center">
-                              <span className="px-2 py-0.5 rounded-full bg-cyan-500 text-slate-950 font-black font-changa text-[9px] shadow animate-pulse">
-                                ★ الجارية الآن
-                              </span>
-                            </div>
-                          )}
-
-                          {isBannedA && (
-                            <div className="mt-1 flex items-center justify-center gap-1 text-[9px] text-rose-300 font-bold bg-rose-950/80 rounded py-0.5 border border-rose-800">
-                              <Ban className="w-2.5 h-2.5 text-rose-400" />
-                              <span>حظر {teamA.shortName}</span>
-                            </div>
-                          )}
-
-                          {isBannedB && (
-                            <div className="mt-1 flex items-center justify-center gap-1 text-[9px] text-rose-300 font-bold bg-rose-950/80 rounded py-0.5 border border-rose-800">
-                              <Ban className="w-2.5 h-2.5 text-rose-400" />
-                              <span>حظر {teamB.shortName}</span>
-                            </div>
-                          )}
-
-                          {isPickedA && (
-                            <div className="mt-1 flex items-center justify-center gap-1 text-[9px] text-purple-200 font-bold bg-purple-950/80 rounded py-0.5 border border-purple-600">
-                              <Check className="w-2.5 h-2.5 text-purple-300" />
-                              <span>اختيار {teamA.shortName}</span>
-                            </div>
-                          )}
-
-                          {isPickedB && (
-                            <div className="mt-1 flex items-center justify-center gap-1 text-[9px] text-cyan-200 font-bold bg-cyan-950/80 rounded py-0.5 border border-cyan-600">
-                              <Check className="w-2.5 h-2.5 text-cyan-300" />
-                              <span>اختيار {teamB.shortName}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
+        <section dir="rtl" className="ce-games-wall">
+          <div className="ce-games-title"><div><span className="ce-eyebrow">CLASH OF ELITES / BAN & PICK</span><h2>ساحة اختيار الألعاب</h2></div><div className="ce-games-versus"><span style={{color:teamA?.color}}>{teamA?.name}</span><b>VS</b><span style={{color:teamB?.color}}>{teamB?.name}</span></div></div>
+          <div className="ce-games-grid">
+            {arenaColumns.map(col=>{
+              const keys=arenaColumnGames[col.catId]||DEFAULT_ARENA_COLUMN_GAMES[col.catId]||[];
+              let colGames=keys.map(key=>games.find(g=>g.id===key)||DEFAULT_GAMES.find(g=>g.id===key)).filter(Boolean) as GameItem[];
+              if(colGames.length<3)colGames=[...colGames,...DEFAULT_GAMES.filter(g=>g.categoryId===col.catId&&!colGames.some(c=>c.id===g.id)).slice(0,3-colGames.length)];
+              return <section key={col.catId} className="ce-games-column" style={{'--cat':col.headerColor} as React.CSSProperties}>
+                <header className="ce-games-category"><span>{col.label}</span><h3>{col.subLabel}</h3></header>
+                <div className="ce-games-stack">{colGames.map(game=>{
+                  const state=cardStates[game.id]?.status||'available';
+                  const current=currentMatch.activeGameId===game.id||state==='current';
+                  const banned=state==='banned_team_a'||state==='banned_team_b';
+                  const picked=state==='picked_team_a'||state==='picked_team_b';
+                  const team=state.endsWith('team_a')?teamA:state.endsWith('team_b')?teamB:undefined;
+                  const completed=state==='completed';
+                  const label=current?'الجارية الآن':banned?'حظر '+(team?.shortName||''):picked?'اختيار '+(team?.shortName||''):completed?'انتهت':'متاحة';
+                  const stateColor=current?'#f9da86':banned?'#ff7a84':picked?(team?.color||col.headerColor):completed?'#a8b7ae':col.headerColor;
+                  return <article key={game.id} className={'ce-game-tile '+(current?'ce-game-current':banned?'ce-game-banned':picked?'ce-game-picked':completed?'ce-game-completed':'')} style={{'--status':stateColor} as React.CSSProperties}>
+                    <div className="ce-game-art">{game.customImage?<img src={game.customImage} alt="" onError={e=>{e.currentTarget.style.display='none';}}/>:<GameIcon name={game.iconType} className="ce-game-icon"/>}</div>
+                    <h4>{game.nameAr}</h4><div className="ce-game-state">{banned&&!current?<Ban/>:picked||completed?<Check/>:current?<Flame/>:<i/>}<span>{label}</span></div>
+                  </article>;
+                })}</div>
+              </section>;
             })}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Bottom Leaderboard Strip */}
-      <div className="broadcast-leaderboard bg-[#0C1226]/80 rounded-2xl p-3 border border-slate-800/80 mt-4">
+      <div className={broadcastView==='games'?'ce-games-rankstrip':'broadcast-leaderboard bg-[#0C1226]/80 rounded-2xl p-3 border border-slate-800/80 mt-4'}>
         <div className="text-[11px] text-slate-400 font-semibold mb-1.5 flex items-center gap-1.5">
           <Trophy className="w-3 h-3 text-amber-400" />
           <span>ترتيب دوري صراع النخبة المباشر:</span>
