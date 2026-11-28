@@ -441,7 +441,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentMatch, introOpen, isVictoryModalOpen]);
+  }, [currentMatch, games, introOpen, isVictoryModalOpen]);
 
   // Column game swap handler (from phone or PC)
   const handleChangeColumnGame = (categoryId: string, slotIndex: number, newGameId: string) => {
@@ -486,6 +486,8 @@ export default function App() {
 
   // Change Team A or B
   const handleChangeTeam = (slot: 'A' | 'B', newTeamId: string) => {
+    if (currentMatch.teamAScore || currentMatch.teamBScore) return;
+    if (!teams.some(t=>t.id===newTeamId)) return;
     const nextMatch = { ...currentMatch };
     if (slot === 'A') {
       if (newTeamId === nextMatch.teamBId) return;
@@ -514,6 +516,7 @@ export default function App() {
 
   const handleToggleFinal = () => {
     if (currentMatch.teamAScore || currentMatch.teamBScore || currentMatch.teamAId === currentMatch.teamBId) return;
+    if (!currentMatch.stage && matchesHistory.some(m=>m.stage==='final')) { window.alert('النهائي معتمد مسبقاً. احذف نتيجته من السجل فقط إذا كانت خاطئة.'); return; }
     if (!currentMatch.stage && !window.confirm('اعتماد الفريقين المختارين لخوض المباراة النهائية الرسمية؟')) return;
     const next: CurrentMatch = { ...currentMatch, stage: currentMatch.stage === 'final' ? undefined : 'final' };
     setCurrentMatch(next);
@@ -531,10 +534,9 @@ export default function App() {
       return;
     }
     if (currentMatch.teamAId === currentMatch.teamBId || !teams.some(t=>t.id===currentMatch.teamAId) || !teams.some(t=>t.id===currentMatch.teamBId)) return;
+    if (currentMatch.teamAScore === currentMatch.teamBScore) return;
+    if (currentMatch.stage === 'final' && matchesHistory.some(m=>m.stage==='final')) return;
     if (currentMatch.stage === 'final' && !window.confirm('اعتماد نتيجة النهائي وإعلان بطل صراع النخبة؟')) return;
-    if (currentMatch.teamAScore === currentMatch.teamBScore) {
-      return;
-    }
 
     const winnerId =
       currentMatch.teamAScore > currentMatch.teamBScore
@@ -680,6 +682,7 @@ export default function App() {
 
   // Reset entire League
   const handleResetLeague = () => {
+    if (!window.confirm('حذف جميع نتائج الدوري والتتويج؟ لا يمكن التراجع عن ذلك.')) return;
     setMatchesHistory([]);
     saveMatchesHistory([]);
     handleResetCurrentMatch();
