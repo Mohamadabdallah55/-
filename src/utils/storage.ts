@@ -660,9 +660,7 @@ export function loadMatchesHistory(): MatchRecord[] {
     const raw = localStorage.getItem(STORAGE_KEYS.MATCHES_HISTORY);
     if (raw) {
       const saved: MatchRecord[] = JSON.parse(raw);
-      if (saved.length) return saved;
-      localStorage.setItem(STORAGE_KEYS.MATCHES_HISTORY, JSON.stringify(WEEK_ONE_RESULTS));
-      return WEEK_ONE_RESULTS;
+      if (Array.isArray(saved)) return saved; // keep a deliberately reset empty history
     }
     localStorage.setItem(STORAGE_KEYS.MATCHES_HISTORY, JSON.stringify(WEEK_ONE_RESULTS));
     return WEEK_ONE_RESULTS;
