@@ -46,6 +46,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
   const matchWinner = currentMatch.teamAScore >= 3 ? teamA : currentMatch.teamBScore >= 3 ? teamB : null;
 
   const handleScore = (team: 'A' | 'B', delta: number) => {
+    if (delta > 0 && isMatchDecided) return;
     if (delta > 0) {
       sound.playScorePoint(team === 'A');
       const currentScore = team === 'A' ? currentMatch.teamAScore : currentMatch.teamBScore;
@@ -114,6 +115,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
           <select
             value={currentMatch.teamAId}
             onChange={(e) => onChangeTeam('A', e.target.value)}
+            disabled={Boolean(currentMatch.teamAScore || currentMatch.teamBScore)}
             className="w-full bg-[#070B19] text-white text-sm font-semibold rounded-lg px-3 py-1.5 border border-purple-500/40 focus:border-purple-400 focus:outline-none"
           >
             {teams.map((t) => (
@@ -130,6 +132,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
           <select
             value={currentMatch.teamBId}
             onChange={(e) => onChangeTeam('B', e.target.value)}
+            disabled={Boolean(currentMatch.teamAScore || currentMatch.teamBScore)}
             className="w-full bg-[#070B19] text-white text-sm font-semibold rounded-lg px-3 py-1.5 border border-cyan-500/40 focus:border-cyan-400 focus:outline-none"
           >
             {teams.map((t) => (
@@ -145,9 +148,9 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
       <div className="relative my-4">
         <section aria-label="مركز المواجهة" className="relative isolate overflow-hidden rounded-sm border border-white/15 bg-[#080d0c] px-3 py-5 sm:px-8 sm:py-12">
           <div className="absolute inset-0 -z-10 opacity-85"><CinematicStage left={teamB?.color} right={teamA?.color} gold={isFinal}/></div>
-          <div className="absolute inset-x-0 top-0 h-[3px]" style={{background:'linear-gradient(90deg,transparent,#bef264,transparent)'}}/>
+          <div className="absolute inset-x-0 top-0 h-[3px]" style={{background:`linear-gradient(90deg,transparent,${isFinal?"#f7d58e":"#bef264"},transparent)`}}/>
           <div className="mb-6 text-center">
-            <span className="font-orbitron text-[10px] sm:text-xs font-bold tracking-[0.25em] text-emerald-300">{isFinal ? "ELITE CLASH / THE GRAND FINAL" : "ELITE CLASH / MATCH CENTER"}</span>
+            <span className={`font-orbitron text-[10px] sm:text-xs font-bold tracking-[0.25em] ${isFinal?"text-amber-300":"text-emerald-300"}`}>{isFinal ? "ELITE CLASH / THE GRAND FINAL" : "ELITE CLASH / MATCH CENTER"}</span>
             <h2 className="mt-2 font-changa text-2xl sm:text-4xl font-black text-white">{isFinal ? "المباراة النهائية" : "ساحة المواجهة"}</h2>
             <span className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/25 px-3 py-1 text-xs text-slate-200">
               <span className={`h-2 w-2 rounded-full ${isMatchDecided ? 'bg-amber-400' : currentMatch.teamAScore + currentMatch.teamBScore > 0 ? 'bg-emerald-400' : 'bg-slate-400'}`} />
@@ -174,7 +177,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
                 </motion.div>
               );
               return slot === 'A' ? <React.Fragment key={slot}>{block}<div className="self-center text-center">{isFinal && <motion.div initial={reducedMotion ? false : {opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{duration:.55}} className="mx-auto mb-2 h-16 w-14 sm:h-32 sm:w-28"><EliteTrophy className="h-full w-full drop-shadow-[0_0_16px_#e3b25466]" /></motion.div>}<div aria-hidden="true" className="mb-2 font-orbitron text-[10px] sm:text-sm tracking-[.25em] text-lime-300">VERSUS</div>
-                <div className="flex items-center justify-center gap-1 sm:gap-3 font-orbitron text-3xl sm:text-7xl font-black tabular-nums text-white" dir="ltr">
+                <div className="flex items-center justify-center gap-1 sm:gap-3 font-orbitron text-3xl sm:text-7xl font-black tabular-nums text-white" dir="rtl">
                   <CountUpValue value={currentMatch.teamAScore} /><span className="text-slate-500 text-xl sm:text-4xl">:</span><CountUpValue value={currentMatch.teamBScore} />
                 </div>
                 <span className="mt-3 inline-block border-y border-lime-300/30 px-2 py-1 font-orbitron text-[10px] tracking-wider text-lime-200">BEST OF 5</span>
