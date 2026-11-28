@@ -13,7 +13,7 @@ export function CinematicIntro({teams,onClose}:{teams:Team[];onClose:()=>void}) 
  useEffect(()=>{const timer=window.setTimeout(()=>{if(scene<2)setScene(scene+1);else onClose();},durations[scene]);return()=>window.clearTimeout(timer)},[scene,onClose]);
  useEffect(()=>{const listener=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};window.addEventListener('keydown',listener);return()=>window.removeEventListener('keydown',listener)},[onClose]);
 
- return createPortal(<div role="dialog" aria-modal="true" aria-label="افتتاحية صراع النخبة" className="fixed inset-0 z-[10001] isolate overflow-hidden bg-[#050908] text-white">
+ return createPortal(<div role="dialog" aria-modal="true" aria-label="افتتاحية صراع النخبة" className="fixed inset-0 z-[2147483647] isolate overflow-hidden bg-[#050908] text-white">
    <button autoFocus onClick={onClose} className="absolute left-4 top-4 z-20 rounded-xl border border-white/25 bg-black/40 px-4 py-3 text-sm font-bold">تخطي الافتتاحية</button>
    <AnimatePresence mode="wait" initial={false}>
    {scene===0?<motion.div key="opening" className="absolute inset-0 isolate" initial={false} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:reduced?0:.28}}>
@@ -28,5 +28,5 @@ export function CinematicIntro({teams,onClose}:{teams:Team[];onClose:()=>void}) 
    </motion.div>
    </motion.div>:<motion.div key={scene} className="absolute inset-0 flex ce-opening-final-scene" initial={reduced?false:{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:reduced?0:.3}}><FinalPresentation view={scene===1?'welcome':'finalists'} teams={teams}/></motion.div>}
    </AnimatePresence>
- </div>,document.body);
+ </div>,document.fullscreenElement || document.body);
 }

@@ -1267,6 +1267,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               ))}
             </div>
 
+            <button type="button" onClick={()=>{triggerHaptic(20);broadcastMessage('OPEN_MODAL_COMMAND','intro');showFeedback('تم إرسال أمر إعادة الافتتاحية');}} className="w-full py-3 rounded-xl border border-lime-400/70 bg-lime-950/80 text-lime-200 font-changa font-black text-sm">▶ إعادة الافتتاحية على شاشة العرض</button>
             {/* Quick Stage, Scroll & Modal Close Strip */}
             <div className="flex items-center justify-between gap-1">
               <button
@@ -2471,6 +2472,7 @@ export const MobileRemoteController: React.FC<MobileRemoteControllerProps> = ({
               </button>
             </div>
 
+            <button type="button" onClick={()=>{triggerHaptic(20);broadcastMessage('OPEN_MODAL_COMMAND','intro');showFeedback('تم إرسال أمر إعادة الافتتاحية');}} className="w-full py-3 rounded-xl border border-lime-400/70 bg-lime-950/80 text-lime-200 font-changa font-black text-sm">▶ إعادة الافتتاحية على شاشة العرض</button>
             {/* Open Specific Modals on Laptop */}
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
               <button
