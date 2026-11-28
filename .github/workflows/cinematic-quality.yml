@@ -13,9 +13,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install
-      - name: Report generated GSAP lock entry
-        run: grep -F '"gsap"' bun.lock
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun test tests/matchRules.test.mjs
