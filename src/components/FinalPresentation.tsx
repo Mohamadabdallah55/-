@@ -24,7 +24,7 @@ export function FinalPresentation({view,teams}:{view:'welcome'|'finalists';teams
      <motion.div {...reveal(.1)} className="ce-welcome-cup"><EliteTrophy className="ce-final-trophy"/></motion.div>
      <motion.div {...reveal(.3)} className="ce-welcome-copy"><p className="ce-final-overline">ليلة الختام · دوري صراع النخبة</p><h1>أهلًا وسهلًا<br/>بجمهور النخبة</h1><p className="ce-welcome-sub">نتمنى لكم مشاهدة ممتعة</p><p className="ce-welcome-line">شجّعوا بروح رياضية، واستمتعوا بلحظات النهائي.</p></motion.div>
    </div>:<div className="ce-finalists-content">
-     <motion.div {...reveal(.08)} className="ce-finalists-heading"><p className="ce-final-overline">المواجهة الختامية</p><h1>طرفا النهائي</h1></motion.div>
+     <motion.div {...reveal(.08)} className="ce-finalists-heading"><p className="ce-final-overline">المواجهة الختامية</p><h1>طرفي النهائي</h1></motion.div>
      <div className="ce-finalists-grid">
        <motion.div {...reveal(.2,70)} className="ce-final-contender" style={{'--final-team':e?.color||'#f43f5e'} as React.CSSProperties}><div className="ce-final-teamlight"/><TeamCrest team={e} className="ce-final-crest"/><span className="ce-final-teamid">TEAM E</span><h2>يوسف</h2><p>الفريق E</p></motion.div>
        <motion.div {...reveal(.42)} className="ce-final-center"><EliteTrophy className="ce-final-trophy"/><div className="ce-final-vs">VS</div><span>كأس النخبة</span></motion.div>
