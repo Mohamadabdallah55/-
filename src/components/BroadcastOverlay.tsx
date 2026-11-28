@@ -32,6 +32,7 @@ interface BroadcastOverlayProps {
   initialView?: 'scoreboard' | 'games';
   onViewChange?: (view: 'scoreboard' | 'games') => void;
   onClose: () => void;
+  onReplayIntro?: () => void;
 }
 
 export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
@@ -45,6 +46,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
   initialView = 'scoreboard',
   onViewChange,
   onClose,
+  onReplayIntro,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [broadcastView, setBroadcastView] = useState<'scoreboard' | 'games'>(initialView);
@@ -177,6 +179,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {onReplayIntro&&<button type="button" onClick={onReplayIntro} className="rounded-lg bg-lime-950 border border-lime-400/70 px-3 py-2 text-sm font-bold text-lime-200">إعادة الافتتاحية</button>}
           <button
             onClick={toggleFullscreen}
             className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 transition-colors"
