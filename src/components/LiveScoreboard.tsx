@@ -1,9 +1,13 @@
 import React from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { CurrentMatch, Team, GameItem, CategoryInfo } from '../types';
 import { GameIcon } from './GameIcons';
 import { Plus, Minus, Trophy, CheckCircle2, RotateCcw, Play, Sparkles } from 'lucide-react';
 import { sound } from '../utils/audio';
 import { CountUpValue } from './CountUpValue';
+import { EliteTrophy } from './EliteTrophy';
+import { CinematicStage } from './CinematicStage';
+import { TeamCrest } from './TeamCrest';
 
 interface LiveScoreboardProps {
   currentMatch: CurrentMatch;
@@ -15,6 +19,7 @@ interface LiveScoreboardProps {
   onFinishMatch: () => void;
   onResetCurrentMatch: () => void;
   onOpenBanPickTab: () => void;
+  onToggleFinal?: () => void;
 }
 
 export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
@@ -27,10 +32,13 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
   onFinishMatch,
   onResetCurrentMatch,
   onOpenBanPickTab,
+  onToggleFinal,
 }) => {
   const teamA = teams.find((t) => t.id === currentMatch.teamAId) || teams[0];
   const teamB = teams.find((t) => t.id === currentMatch.teamBId) || teams[1] || teams[0];
 
+  const reducedMotion = useReducedMotion();
+  const isFinal = currentMatch.stage === 'final';
   const activeGame = games.find((g) => g.id === currentMatch.activeGameId);
   const activeCategory = activeGame ? categories.find((c) => c.id === activeGame.categoryId) : null;
 
@@ -38,6 +46,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
   const matchWinner = currentMatch.teamAScore >= 3 ? teamA : currentMatch.teamBScore >= 3 ? teamB : null;
 
   const handleScore = (team: 'A' | 'B', delta: number) => {
+    if (delta > 0 && isMatchDecided) return;
     if (delta > 0) {
       sound.playScorePoint(team === 'A');
       const currentScore = team === 'A' ? currentMatch.teamAScore : currentMatch.teamBScore;
@@ -97,6 +106,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
         </div>
       </div>
 
+      {onToggleFinal && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border border-amber-300/25 bg-amber-950/20 px-4 py-3"><span className="text-sm font-bold text-amber-200">{isFinal ? 'المباراة النهائية الرسمية' : 'المباراة العادية'}</span><button type="button" onClick={onToggleFinal} disabled={Boolean(currentMatch.teamAScore || currentMatch.teamBScore)} className="rounded-lg border border-amber-300/40 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-40">{isFinal ? 'إلغاء وضع النهائي' : 'تفعيل وضع النهائي'}</button></div>}
       {/* Match Setup Selectors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Team A Picker */}
@@ -105,6 +115,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
           <select
             value={currentMatch.teamAId}
             onChange={(e) => onChangeTeam('A', e.target.value)}
+            disabled={Boolean(currentMatch.teamAScore || currentMatch.teamBScore)}
             className="w-full bg-[#070B19] text-white text-sm font-semibold rounded-lg px-3 py-1.5 border border-purple-500/40 focus:border-purple-400 focus:outline-none"
           >
             {teams.map((t) => (
@@ -121,6 +132,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
           <select
             value={currentMatch.teamBId}
             onChange={(e) => onChangeTeam('B', e.target.value)}
+            disabled={Boolean(currentMatch.teamAScore || currentMatch.teamBScore)}
             className="w-full bg-[#070B19] text-white text-sm font-semibold rounded-lg px-3 py-1.5 border border-cyan-500/40 focus:border-cyan-400 focus:outline-none"
           >
             {teams.map((t) => (
@@ -134,125 +146,46 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
 
       {/* MAIN BROADCAST SCOREBOARD */}
       <div className="relative my-4">
-        {/* Outer Banner */}
-        <div className="score-stage bg-[#050814] rounded-2xl md:rounded-full border-2 border-slate-700/80 shadow-[0_10px_35px_rgba(0,0,0,0.8)] p-2 md:p-3 flex flex-col md:flex-row items-center justify-between gap-4">
-          {/* Team A Block */}
-          <div className="flex items-center gap-3 md:gap-5 w-full md:w-auto justify-between md:justify-start">
-            {/* Score Pill A */}
-            <div
-              className="score-value w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl flex items-center justify-center text-3xl md:text-4xl font-extrabold font-orbitron text-white shadow-lg transition-transform hover:scale-105 shrink-0"
-              style={{
-                backgroundColor: teamA?.color || '#A855F7',
-                boxShadow: `0 0 25px ${teamA?.color || '#A855F7'}60`,
-              }}
-            >
-              <CountUpValue value={currentMatch.teamAScore} />
-            </div>
-
-            {/* Team A Name & Crest */}
-            <div className="flex items-center gap-3 text-right">
-              <div>
-                <h3 className="text-lg md:text-2xl font-black font-changa tracking-wide text-white uppercase">
-                  {teamA?.shortName || teamA?.name}
-                </h3>
-                <p className="text-xs text-purple-300/80 font-medium">{teamA?.name}</p>
-              </div>
-              <div
-                className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center border-2 border-purple-400/50 bg-purple-950/40 text-purple-300"
-              >
-                <GameIcon name={teamA?.logo || 'crown'} className="w-5 h-5 md:w-6 md:h-6" />
-              </div>
-            </div>
-
-            {/* Quick +/- Score Stepper for Team A */}
-            <div className="flex flex-col gap-1 mr-2">
-              <button
-                onClick={() => handleScore('A', 1)}
-                disabled={currentMatch.teamAScore >= 3}
-                title="إضافة جولة للفريق الأول"
-                className="w-7 h-7 rounded-md bg-purple-600/40 hover:bg-purple-600 disabled:opacity-30 disabled:hover:bg-purple-600/40 text-white flex items-center justify-center transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleScore('A', -1)}
-                disabled={currentMatch.teamAScore <= 0}
-                title="خصم جولة من الفريق الأول"
-                className="w-7 h-7 rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 flex items-center justify-center transition-colors"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-            </div>
+        <section aria-label="مركز المواجهة" className="relative isolate overflow-hidden rounded-sm border border-white/15 bg-[#080d0c] px-3 py-5 sm:px-8 sm:py-12">
+          <div className="absolute inset-0 -z-10 opacity-85"><CinematicStage left={teamB?.color} right={teamA?.color} gold={isFinal}/></div>
+          <div className="absolute inset-x-0 top-0 h-[3px]" style={{background:`linear-gradient(90deg,transparent,${isFinal?"#f7d58e":"#bef264"},transparent)`}}/>
+          <div className="mb-6 text-center">
+            <span className={`font-orbitron text-[10px] sm:text-xs font-bold tracking-[0.25em] ${isFinal?"text-amber-300":"text-emerald-300"}`}>{isFinal ? "ELITE CLASH / THE GRAND FINAL" : "ELITE CLASH / MATCH CENTER"}</span>
+            <h2 className="mt-2 font-changa text-2xl sm:text-4xl font-black text-white">{isFinal ? "المباراة النهائية" : "ساحة المواجهة"}</h2>
+            <span className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/25 px-3 py-1 text-xs text-slate-200">
+              <span className={`h-2 w-2 rounded-full ${isMatchDecided ? 'bg-amber-400' : currentMatch.teamAScore + currentMatch.teamBScore > 0 ? 'bg-emerald-400' : 'bg-slate-400'}`} />
+              {isMatchDecided ? 'حُسمت المواجهة — بانتظار اعتماد النتيجة' : currentMatch.teamAScore + currentMatch.teamBScore > 0 ? 'المواجهة جارية' : 'جاهزون للمواجهة'}
+            </span>
           </div>
-
-          {/* Center Hexagonal Emblem */}
-          <div className="versus-mark relative flex flex-col items-center justify-center my-2 md:my-0">
-            <div className="relative">
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 p-0.5 shadow-[0_0_25px_rgba(99,102,241,0.5)]">
-                <div className="w-full h-full bg-[#070B19] rounded-[14px] flex flex-col items-center justify-center">
-                  <GameIcon
-                    name={activeGame?.iconType || 'trophy'}
-                    className="w-7 h-7 md:w-9 md:h-9 text-cyan-300"
-                  />
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:gap-8" dir="rtl">
+            {(['A','B'] as const).map(slot => {
+              const team = slot === 'A' ? teamA : teamB;
+              const score = slot === 'A' ? currentMatch.teamAScore : currentMatch.teamBScore;
+              const accent = team?.color || (slot === 'A' ? '#a855f7' : '#06b6d4');
+              const block = (
+                <motion.div key={team?.id || slot} initial={reducedMotion ? false : {opacity:0, x:slot === 'A' ? 16 : -16}} animate={{opacity:1,x:0}} transition={{duration:0.55,ease:[0.22,1,0.36,1],delay:slot === "A" ? 0 : 0.08}} className="min-w-0 flex flex-col items-center text-center">
+                  <TeamCrest team={team} className="w-[clamp(3.5rem,14vw,11rem)]" />
+                  <h3 className="mt-3 break-words w-full font-changa text-sm sm:text-2xl font-black text-white">{team?.name || 'اختر الفريق'}</h3>
+                  <p className="text-[10px] sm:text-xs text-slate-300">{team?.shortName || '—'}</p>
+                  <div className="mt-3 flex gap-1.5" aria-label="الجولات المحسومة">
+                    {[1,2,3].map(n=><span key={n} className="h-2 w-5 sm:w-8 rounded-full border border-white/15" style={{backgroundColor:score>=n?accent:'#ffffff12'}} />)}
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" aria-label={`إضافة جولة للفريق ${slot}`} onClick={()=>handleScore(slot,1)} disabled={score>=3 || isMatchDecided || !team} className="grid h-10 w-10 sm:h-12 sm:w-12 place-items-center rounded-xl border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/20 disabled:opacity-30"><Plus className="h-5 w-5" /></button>
+                    <button type="button" aria-label={`خصم جولة للفريق ${slot}`} onClick={()=>handleScore(slot,-1)} disabled={score<=0} className="grid h-10 w-10 sm:h-12 sm:w-12 place-items-center rounded-xl border border-white/15 bg-black/30 text-slate-300 transition-colors hover:bg-white/10 disabled:opacity-30"><Minus className="h-5 w-5" /></button>
+                  </div>
+                </motion.div>
+              );
+              return slot === 'A' ? <React.Fragment key={slot}>{block}<div className="self-center text-center">{isFinal && <motion.div initial={reducedMotion ? false : {opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{duration:.55}} className="mx-auto mb-2 h-16 w-14 sm:h-32 sm:w-28"><EliteTrophy className="h-full w-full drop-shadow-[0_0_16px_#e3b25466]" /></motion.div>}<div aria-hidden="true" className="mb-2 font-orbitron text-[10px] sm:text-sm tracking-[.25em] text-lime-300">VERSUS</div>
+                <div className="flex items-center justify-center gap-1 sm:gap-3 font-orbitron text-3xl sm:text-7xl font-black tabular-nums text-white" dir="rtl">
+                  <CountUpValue value={currentMatch.teamAScore} /><span className="text-slate-500 text-xl sm:text-4xl">:</span><CountUpValue value={currentMatch.teamBScore} />
                 </div>
-              </div>
-              <div className="absolute -bottom-2 inset-x-0 mx-auto text-center">
-                <span className="text-[10px] font-orbitron uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-300">
-                  BO5
-                </span>
-              </div>
-            </div>
+                <span className="mt-3 inline-block border-y border-lime-300/30 px-2 py-1 font-orbitron text-[10px] tracking-wider text-lime-200">BEST OF 5</span>
+                <p className="mt-2 max-w-[110px] break-words text-[10px] sm:text-xs text-emerald-200">{activeGame?.nameAr || 'أول من يصل إلى 3'}</p>
+              </div></React.Fragment> : <React.Fragment key={slot}>{block}</React.Fragment>;
+            })}
           </div>
-
-          {/* Team B Block */}
-          <div className="flex items-center gap-3 md:gap-5 w-full md:w-auto justify-between md:justify-end">
-            {/* Quick +/- Score Stepper for Team B */}
-            <div className="flex flex-col gap-1 ml-2">
-              <button
-                onClick={() => handleScore('B', 1)}
-                disabled={currentMatch.teamBScore >= 3}
-                title="إضافة جولة للفريق الثاني"
-                className="w-7 h-7 rounded-md bg-cyan-600/40 hover:bg-cyan-600 disabled:opacity-30 disabled:hover:bg-cyan-600/40 text-white flex items-center justify-center transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleScore('B', -1)}
-                disabled={currentMatch.teamBScore <= 0}
-                title="خصم جولة من الفريق الثاني"
-                className="w-7 h-7 rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 flex items-center justify-center transition-colors"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Team B Name & Crest */}
-            <div className="flex items-center gap-3 text-left">
-              <div
-                className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center border-2 border-cyan-400/50 bg-cyan-950/40 text-cyan-300"
-              >
-                <GameIcon name={teamB?.logo || 'shield'} className="w-5 h-5 md:w-6 md:h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg md:text-2xl font-black font-changa tracking-wide text-white uppercase">
-                  {teamB?.shortName || teamB?.name}
-                </h3>
-                <p className="text-xs text-cyan-300/80 font-medium">{teamB?.name}</p>
-              </div>
-            </div>
-
-            {/* Score Pill B */}
-            <div
-              className="score-value w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl flex items-center justify-center text-3xl md:text-4xl font-extrabold font-orbitron text-white shadow-lg transition-transform hover:scale-105 shrink-0"
-              style={{
-                backgroundColor: teamB?.color || '#06B6D4',
-                boxShadow: `0 0 25px ${teamB?.color || '#06B6D4'}60`,
-              }}
-            >
-              <CountUpValue value={currentMatch.teamBScore} />
-            </div>
-          </div>
-        </div>
+        </section>
 
         {/* 5-ROUNDS INTERACTIVE TIMELINE TRACKER */}
         <div className="round-track mt-4 p-3 rounded-2xl bg-[#070D1E] border border-slate-800">
@@ -264,8 +197,10 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
           <div className="grid grid-cols-5 gap-2 sm:gap-3">
             {[1, 2, 3, 4, 5].map((roundNum) => {
               const totalRoundsPlayed = currentMatch.teamAScore + currentMatch.teamBScore;
-              const isWonByA = roundNum <= currentMatch.teamAScore;
-              const isWonByB = roundNum > currentMatch.teamAScore && roundNum <= totalRoundsPlayed;
+              const savedRound = currentMatch.rounds?.find(r=>r.round===roundNum);
+              const isWonByA = savedRound?.winnerTeamId === currentMatch.teamAId;
+              const isWonByB = savedRound?.winnerTeamId === currentMatch.teamBId;
+              const unknownWinner = roundNum <= totalRoundsPlayed && !isWonByA && !isWonByB;
               const isCurrent = roundNum === totalRoundsPlayed + 1 && !isMatchDecided;
 
               return (
@@ -296,7 +231,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
                     ) : isCurrent ? (
                       <span className="text-amber-300">جارية 🔴</span>
                     ) : (
-                      <span className="text-slate-600">-</span>
+                      <span className="text-slate-400">{unknownWinner ? "محسومة" : "—"}</span>
                     )}
                   </div>
                 </div>
@@ -324,7 +259,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
                 </span>
               </div>
               <p className="text-xs text-amber-200/70 mt-0.5">
-                تأهل واحتساب 3 نقاط في جدول الترتيب العام لدوري صراع النخبة.
+                {isFinal ? "بانتظار اعتماد نتيجة النهائي وإعلان البطل." : "بانتظار اعتماد النتيجة واحتساب نقاط الأسبوع المحددة."}
               </p>
             </div>
           </div>
@@ -343,7 +278,7 @@ export const LiveScoreboard: React.FC<LiveScoreboardProps> = ({
 
         <button
           onClick={onFinishMatch}
-          disabled={currentMatch.teamAScore === 0 && currentMatch.teamBScore === 0}
+          disabled={currentMatch.teamAScore === currentMatch.teamBScore || (isFinal && !isMatchDecided)}
           className={`w-full sm:w-auto px-6 py-3 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2.5 shadow-lg ${
             isMatchDecided
               ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-emerald-600/30 scale-102 ring-2 ring-emerald-400/40'

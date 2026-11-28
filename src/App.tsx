@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { Gamepad2, Trophy, UsersRound } from 'lucide-react';
 import {
@@ -52,6 +52,8 @@ import { MobileRemoteController } from './components/MobileRemoteController';
 import { MobileConnectModal } from './components/MobileConnectModal';
 import { ArenaStageView } from './components/ArenaStageView';
 import { VictoryModal } from './components/VictoryModal';
+import { CinematicIntro } from './components/CinematicIntro';
+import { applyRoundScore, isCertifiedFinal } from './utils/matchRules';
 import { HotkeysModal } from './components/HotkeysModal';
 import { SpotlightCard } from './components/SpotlightCard';
 import { CountUpValue } from './components/CountUpValue';
@@ -82,6 +84,15 @@ const PAGE_COPY = {
 export default function App() {
   // Check if opened as standalone window via URL hash #standalone-timer or #remote / /remote / ?mode=remote
   const [isStandaloneTimer, setIsStandaloneTimer] = useState<boolean>(false);
+  const [introOpen, setIntroOpen] = useState(false);
+  const closeIntro = useCallback(() => setIntroOpen(false), []);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.pathname !== '/' && url.pathname !== '/index.html') return;
+    if (url.hash || url.searchParams.has('tab') || url.searchParams.has('mode') || url.searchParams.has('remote')) return;
+    try { if (sessionStorage.getItem('ce-intro-v1')) return; sessionStorage.setItem('ce-intro-v1','1'); } catch {}
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) setIntroOpen(true);
+  }, []);
   const [isRemoteMode, setIsRemoteMode] = useState<boolean>(false);
   const [isMobileConnectModalOpen, setIsMobileConnectModalOpen] = useState<boolean>(false);
 
@@ -91,6 +102,7 @@ export default function App() {
   const [isVictoryModalOpen, setIsVictoryModalOpen] = useState<boolean>(false);
   const [victoryWinner, setVictoryWinner] = useState<Team | null>(null);
   const [victoryLoser, setVictoryLoser] = useState<Team | null>(null);
+  const [victoryMatch, setVictoryMatch] = useState<CurrentMatch | null>(null);
   const [isScreenShaking, setIsScreenShaking] = useState<boolean>(false);
 
   // PWA Install prompt state
@@ -291,6 +303,8 @@ export default function App() {
           setTimeout(() => setIsScreenShaking(false), 500);
           setVictoryWinner(winner);
           setVictoryLoser(loser);
+          // Remote celebration commands do not include a certified final score.
+          setVictoryMatch(null);
           setIsVictoryModalOpen(true);
           try {
             confetti({
@@ -307,16 +321,10 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  // Handle Score Updates (+ / -)
+  // Handle score updates with one shared, testable set of rules.
   const handleUpdateScore = (teamSlot: 'A' | 'B', delta: number) => {
-    const nextMatch = { ...currentMatch };
-    if (teamSlot === 'A') {
-      const nextScore = Math.max(0, Math.min(3, nextMatch.teamAScore + delta));
-      nextMatch.teamAScore = nextScore;
-    } else {
-      const nextScore = Math.max(0, Math.min(3, nextMatch.teamBScore + delta));
-      nextMatch.teamBScore = nextScore;
-    }
+    const nextMatch = applyRoundScore(currentMatch, teamSlot, delta, games);
+    if (nextMatch === currentMatch) return;
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
@@ -324,6 +332,7 @@ export default function App() {
   // Keyboard Hotkeys Manager
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (introOpen || isVictoryModalOpen) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -416,7 +425,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentMatch]);
+  }, [currentMatch, games, introOpen, isVictoryModalOpen]);
 
   // Column game swap handler (from phone or PC)
   const handleChangeColumnGame = (categoryId: string, slotIndex: number, newGameId: string) => {
@@ -461,6 +470,8 @@ export default function App() {
 
   // Change Team A or B
   const handleChangeTeam = (slot: 'A' | 'B', newTeamId: string) => {
+    if (currentMatch.teamAScore || currentMatch.teamBScore) return;
+    if (!teams.some(t=>t.id===newTeamId)) return;
     const nextMatch = { ...currentMatch };
     if (slot === 'A') {
       if (newTeamId === nextMatch.teamBId) return;
@@ -469,6 +480,7 @@ export default function App() {
       if (newTeamId === nextMatch.teamAId) return;
       nextMatch.teamBId = newTeamId;
     }
+    if (nextMatch.teamAId !== currentMatch.teamAId || nextMatch.teamBId !== currentMatch.teamBId) delete nextMatch.stage;
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
@@ -486,15 +498,29 @@ export default function App() {
     saveCurrentMatch(nextMatch);
   };
 
+  const handleToggleFinal = () => {
+    if (currentMatch.teamAScore || currentMatch.teamBScore || currentMatch.teamAId === currentMatch.teamBId) return;
+    if (!currentMatch.stage && matchesHistory.some(m=>m.stage==='final')) { window.alert('النهائي معتمد مسبقاً. احذف نتيجته من السجل فقط إذا كانت خاطئة.'); return; }
+    if (!currentMatch.stage && !window.confirm('اعتماد الفريقين المختارين لخوض المباراة النهائية الرسمية؟')) return;
+    const next: CurrentMatch = { ...currentMatch, stage: currentMatch.stage === 'final' ? undefined : 'final' };
+    setCurrentMatch(next);
+    saveCurrentMatch(next);
+  };
+
   // Finish Match and Update Standings (CRITICAL PRD REQUIREMENT)
   const handleFinishMatch = () => {
     if (currentMatch.teamAScore === 0 && currentMatch.teamBScore === 0) {
       return;
     }
 
-    if (currentMatch.teamAScore === currentMatch.teamBScore) {
+    if (currentMatch.stage === 'final' && Math.max(currentMatch.teamAScore, currentMatch.teamBScore) !== 3) {
+      window.alert('لا يعتمد النهائي قبل وصول أحد الفريقين إلى ثلاث جولات.');
       return;
     }
+    if (currentMatch.teamAId === currentMatch.teamBId || !teams.some(t=>t.id===currentMatch.teamAId) || !teams.some(t=>t.id===currentMatch.teamBId)) return;
+    if (currentMatch.teamAScore === currentMatch.teamBScore) return;
+    if (currentMatch.stage === 'final' && matchesHistory.some(m=>m.stage==='final')) return;
+    if (currentMatch.stage === 'final' && !window.confirm('اعتماد نتيجة النهائي وإعلان بطل صراع النخبة؟')) return;
 
     const winnerId =
       currentMatch.teamAScore > currentMatch.teamBScore
@@ -509,6 +535,7 @@ export default function App() {
     const loserObj = teams.find((t) => t.id === loserId) || (loserId === currentMatch.teamAId ? teamA : teamB);
 
     const newRecord: MatchRecord = {
+      stage: currentMatch.stage,
       id: `match-${Date.now()}`,
       date: new Date().toLocaleDateString('ar-SA', {
         month: 'short',
@@ -527,6 +554,7 @@ export default function App() {
       loserId,
       weekNumber: leagueSettings.currentWeek,
       pointsAwarded: leagueSettings.pointsByWeek[leagueSettings.currentWeek] ?? 3,
+      rounds: [...(currentMatch.rounds || [])],
       categoryNames: selectedCategories.map(
         (cId) => CATEGORIES.find((c) => c.id === cId)?.nameAr || cId
       ),
@@ -536,24 +564,11 @@ export default function App() {
     setMatchesHistory(updatedHistory);
     saveMatchesHistory(updatedHistory);
 
-    // Trigger Screen Shake & Victory Modal
-    setIsScreenShaking(true);
-    setTimeout(() => setIsScreenShaking(false), 500);
-
+    // Preserve the actual result before resetting the live scoreboard.
+    setVictoryMatch({ ...currentMatch, rounds: [...(currentMatch.rounds || [])] });
     setVictoryWinner(winnerObj);
     setVictoryLoser(loserObj);
     setIsVictoryModalOpen(true);
-
-    // Confetti burst
-    try {
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 },
-        zIndex: 9999,
-        colors: ['#A855F7', '#06B6D4', '#F59E0B', '#10B981'],
-      });
-    } catch {}
 
     // Reset current match score for next encounter
     const resetMatch: CurrentMatch = {
@@ -651,6 +666,7 @@ export default function App() {
 
   // Reset entire League
   const handleResetLeague = () => {
+    if (!window.confirm('حذف جميع نتائج الدوري والتتويج؟ لا يمكن التراجع عن ذلك.')) return;
     setMatchesHistory([]);
     saveMatchesHistory([]);
     handleResetCurrentMatch();
@@ -710,6 +726,15 @@ export default function App() {
     );
   }
 
+  const finalRecord = [...matchesHistory].filter(isCertifiedFinal).sort((a,b)=>b.timestamp-a.timestamp)[0];
+  const replayFinal = () => {
+    if (!finalRecord) return;
+    const winner=teams.find(t=>t.id===finalRecord.winnerId), loser=teams.find(t=>t.id===finalRecord.loserId);
+    if (!winner || !loser) return;
+    setVictoryWinner(winner);setVictoryLoser(loser);
+    setVictoryMatch({stage:'final',teamAId:finalRecord.teamAId,teamBId:finalRecord.teamBId,teamAScore:finalRecord.teamAScore,teamBScore:finalRecord.teamBScore,rounds:finalRecord.rounds||[],currentRound:5,activeGameId:null});
+    setIsVictoryModalOpen(true);
+  };
   const page = PAGE_COPY[activeTab];
   const today = new Date().toLocaleDateString('ar-JO', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -719,6 +744,7 @@ export default function App() {
         isScreenShaking ? 'animate-screen-shake' : ''
       }`}
     >
+      {introOpen && <CinematicIntro teams={teams} onClose={closeIntro} />}
       {/* Top Bar Navigation */}
       <Header
         activeTab={activeTab}
@@ -747,7 +773,7 @@ export default function App() {
             <h1>{page.title}</h1>
             <p>{page.description}</p>
           </div>
-          <div className="page-heading-stamp"><span>CLASH</span><strong>01</strong><small>ELITE LEAGUE</small></div>
+          <div className="flex items-center gap-3"><button type="button" onClick={() => setIntroOpen(true)} className="rounded-lg border border-lime-300/30 px-3 py-2 text-xs font-bold text-lime-200">إعادة الافتتاحية</button><div className="page-heading-stamp"><span>CLASH</span><strong>01</strong><small>ELITE LEAGUE</small></div></div>
         </section>
 
         {activeTab === 'match' && (
@@ -755,7 +781,7 @@ export default function App() {
             <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-lime"><Trophy /></span><small>مباريات مكتملة</small><strong><CountUpValue value={matchesHistory.length} padTo={2} /></strong><span>هذا الموسم</span></SpotlightCard>
             <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-blue"><UsersRound /></span><small>الفرق المتنافسة</small><strong><CountUpValue value={teams.length} padTo={2} /></strong><span>فريق مسجل</span></SpotlightCard>
             <SpotlightCard className="overview-stat"><span className="overview-stat-icon stat-icon-orange"><Gamepad2 /></span><small>الألعاب المعتمدة</small><strong><CountUpValue value={games.length} padTo={2} /></strong><span>ضمن المكتبة</span></SpotlightCard>
-            <SpotlightCard className="overview-stat overview-stat-feature"><span className="overview-stat-kicker">الجولة الحالية</span><strong><CountUpValue value={currentMatch.teamAScore + currentMatch.teamBScore + 1} padTo={2} /> <small>/ 05</small></strong><span>أفضل خمس جولات</span></SpotlightCard>
+            <SpotlightCard className="overview-stat overview-stat-feature"><span className="overview-stat-kicker">الجولة الحالية</span><strong><CountUpValue value={Math.min(5,currentMatch.teamAScore + currentMatch.teamBScore + 1)} padTo={2} /> <small>/ 05</small></strong><span>أفضل خمس جولات</span></SpotlightCard>
           </div>
         )}
 
@@ -763,6 +789,7 @@ export default function App() {
         {/* TAB 1: LIVE MATCH */}
         {activeTab === 'match' && (
           <div className="page-section page-section-match space-y-8 animate-fade-in">
+            {finalRecord && <button type="button" onClick={replayFinal} className="w-full flex flex-wrap items-center justify-between gap-3 border border-amber-300/40 bg-gradient-to-l from-amber-950/70 to-[#0b110e] px-5 py-4 text-amber-100"><span className="flex items-center gap-3 font-changa font-bold"><Trophy className="h-6 w-6 text-amber-300"/>بطل صراع النخبة · {teams.find(t=>t.id===finalRecord.winnerId)?.name || (finalRecord.winnerId===finalRecord.teamAId?finalRecord.teamAName:finalRecord.teamBName)}</span><span className="text-xs">إعادة عرض التتويج</span></button>}
             {/* Live Scoreboard Banner */}
             <LiveScoreboard
               currentMatch={currentMatch}
@@ -774,6 +801,7 @@ export default function App() {
               onFinishMatch={handleFinishMatch}
               onResetCurrentMatch={handleResetCurrentMatch}
               onOpenBanPickTab={() => setActiveTab('arena')}
+              onToggleFinal={handleToggleFinal}
             />
 
             {/* Category Selector Grid */}
@@ -970,11 +998,8 @@ export default function App() {
           onClose={() => setIsVictoryModalOpen(false)}
           winnerTeam={victoryWinner}
           loserTeam={victoryLoser}
-          currentMatch={currentMatch}
-          onNextMatch={() => {
-            setIsVictoryModalOpen(false);
-            handleResetCurrentMatch();
-          }}
+          currentMatch={victoryMatch}
+          onNextMatch={() => setIsVictoryModalOpen(false)}
         />
       )}
 
