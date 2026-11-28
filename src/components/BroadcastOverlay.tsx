@@ -7,7 +7,6 @@ import { CinematicStage } from './CinematicStage';
 import { TeamCrest } from './TeamCrest';
 import { EliteTrophy } from './EliteTrophy';
 import './BigScreen.css';
-import { FinalPresentation, isBroadcastView, type BroadcastView } from './FinalPresentation';
 import { subscribeToBroadcast, DEFAULT_ARENA_COLUMN_GAMES } from '../utils/storage';
 import { revealWithGsap } from '../utils/gsapMotion';
 import {
@@ -30,8 +29,8 @@ interface BroadcastOverlayProps {
   categories: CategoryInfo[];
   cardStates?: Record<string, { gameId: string; status: BanPickStatus }>;
   arenaColumnGames?: Record<string, string[]>;
-  initialView?: BroadcastView;
-  onViewChange?: (view: BroadcastView) => void;
+  initialView?: 'scoreboard' | 'games';
+  onViewChange?: (view: 'scoreboard' | 'games') => void;
   onClose: () => void;
 }
 
@@ -48,9 +47,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
   onClose,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [broadcastView, setBroadcastView] = useState<BroadcastView>(initialView);
-  const [cleanPresentation,setCleanPresentation]=useState(false);
-  const isPresentation=broadcastView==='welcome'||broadcastView==='finalists';
+  const [broadcastView, setBroadcastView] = useState<'scoreboard' | 'games'>(initialView);
   const broadcastRootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,18 +63,14 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
   // Real-time listener from phone commands
   useEffect(() => {
     const unsub = subscribeToBroadcast((type, payload) => {
-      if (type === 'BROADCAST_VIEW_UPDATED' && isBroadcastView(payload)) {
+      if (type === 'BROADCAST_VIEW_UPDATED' && (payload === 'scoreboard' || payload === 'games')) {
         setBroadcastView(payload);
         onViewChange?.(payload);
-        setCleanPresentation(payload==='welcome'||payload==='finalists');
       }
     });
     return unsub;
   }, [onViewChange]);
 
-  const changeView=(view:BroadcastView)=>{setBroadcastView(view);onViewChange?.(view);setCleanPresentation(view==='welcome'||view==='finalists');};
-  useEffect(()=>{const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')setCleanPresentation(false);};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);},[]);
-  useEffect(()=>{const onFull=()=>setIsFullscreen(Boolean(document.fullscreenElement));document.addEventListener('fullscreenchange',onFull);return()=>document.removeEventListener('fullscreenchange',onFull);},[]);
   const teamA = teams.find((t) => t.id === currentMatch.teamAId) || teams[0];
   const teamB = teams.find((t) => t.id === currentMatch.teamBId) || teams[1] || teams[0];
   const isFinal = currentMatch.stage === 'final';
@@ -141,7 +134,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
   ];
 
   return (
-    <div ref={broadcastRootRef} className={'broadcast-screen fixed inset-0 z-50 bg-[#050814] text-white flex flex-col justify-between p-4 md:p-8 select-none overflow-y-auto '+(isPresentation?'ce-final-presentation-mode ':'')+(isPresentation&&cleanPresentation?'ce-presentation-clean':'')}>
+    <div ref={broadcastRootRef} className="broadcast-screen fixed inset-0 z-50 bg-[#050814] text-white flex flex-col justify-between p-4 md:p-8 select-none overflow-y-auto">
       {/* Top TV Header Bar */}
       <div className="broadcast-topbar flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-3">
@@ -156,10 +149,32 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
           </div>
         </div>
 
-        <nav className="ce-presentation-toolbar" aria-label="مشاهد العرض">
-          {([{id:'welcome',label:'ترحيب الجمهور'},{id:'finalists',label:'طرفا النهائي'},{id:'scoreboard',label:'لوحة النتيجة'},{id:'games',label:'شاشة الألعاب'}] as {id:BroadcastView;label:string}[]).map(item=><button key={item.id} type="button" aria-pressed={broadcastView===item.id} onClick={()=>changeView(item.id)}>{item.label}</button>)}
-          {isPresentation&&<button onClick={()=>setCleanPresentation(true)}>إخفاء التحكم</button>}
-        </nav>
+        {/* View Switcher: Scoreboard vs Games Grid */}
+        <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 shadow-md">
+          <button
+            onClick={() => {setBroadcastView('scoreboard');onViewChange?.('scoreboard');}}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold font-changa text-xs transition-all ${
+              broadcastView === 'scoreboard'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md border border-purple-400'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Trophy className="w-3.5 h-3.5" />
+            <span>لوحة النتيجة المباشرة</span>
+          </button>
+
+          <button
+            onClick={() => {setBroadcastView('games');onViewChange?.('games');}}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold font-changa text-xs transition-all ${
+              broadcastView === 'games'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md border border-cyan-400'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Swords className="w-3.5 h-3.5" />
+            <span>شاشة الألعاب (Ban & Pick)</span>
+          </button>
+        </div>
 
         <div className="flex items-center gap-2">
           <button
@@ -178,8 +193,6 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
         </div>
       </div>
 
-      {isPresentation&&<FinalPresentation key={broadcastView} view={broadcastView as 'welcome'|'finalists'} teams={teams}/>}
-      {isPresentation&&cleanPresentation&&<div className="ce-presentation-restore flex gap-2"><button onClick={()=>changeView(broadcastView==='welcome'?'finalists':'scoreboard')}>{broadcastView==='welcome'?'التالي · طرفا النهائي':'التالي · النتيجة'}</button><button onClick={()=>setCleanPresentation(false)}>التحكم · ESC</button><button onClick={toggleFullscreen}>{isFullscreen?'خروج ملء الشاشة':'ملء الشاشة'}</button></div>}
       {/* VIEW 1: SCOREBOARD VIEW */}
       {broadcastView === 'scoreboard' && (
         <div className="broadcast-scoreboard my-auto max-w-5xl mx-auto w-full space-y-6 animate-fade-in">
@@ -269,7 +282,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
       )}
 
       {/* Bottom Leaderboard Strip */}
-      {!isPresentation&&<div className={broadcastView==='games'?'ce-games-rankstrip':'broadcast-leaderboard bg-[#0C1226]/80 rounded-2xl p-3 border border-slate-800/80 mt-4'}>
+      <div className={broadcastView==='games'?'ce-games-rankstrip':'broadcast-leaderboard bg-[#0C1226]/80 rounded-2xl p-3 border border-slate-800/80 mt-4'}>
         <div className="text-[11px] text-slate-400 font-semibold mb-1.5 flex items-center gap-1.5">
           <Trophy className="w-3 h-3 text-amber-400" />
           <span>ترتيب دوري صراع النخبة المباشر:</span>
@@ -288,7 +301,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
             </div>
           ))}
         </div>
-      </div>}
+      </div>
     </div>
   );
 };
