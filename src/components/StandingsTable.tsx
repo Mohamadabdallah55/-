@@ -4,6 +4,7 @@ import { LeagueRow, MatchRecord } from '../types';
 import { GameIcon } from './GameIcons';
 import { Trophy, History, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { CountUpValue } from './CountUpValue';
+import { TeamCrest } from './TeamCrest';
 
 interface StandingsTableProps {
   standings: LeagueRow[];
@@ -82,7 +83,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
           <div className="relative flex items-center justify-between gap-3 overflow-hidden border-t border-white/10 px-3 py-4 sm:px-5" style={{background:`linear-gradient(105deg,transparent,${standings[0].team.color}35)`}}>
             <div className="flex min-w-0 items-center gap-3">
               <span className="font-orbitron text-3xl font-black text-lime-300">01</span>
-              <span className="grid h-12 w-12 shrink-0 place-items-center border border-white/25" style={{backgroundColor:standings[0].team.color}}><GameIcon name={standings[0].team.logo} className="h-7 w-7 text-white"/></span>
+              <TeamCrest team={standings[0].team} className="w-12 shrink-0"/>
               <div className="min-w-0"><div className="text-[10px] font-bold text-lime-300">متصدر الدوري</div><strong className="break-words font-changa text-lg text-white">{standings[0].team.name}</strong></div>
             </div>
             <div className="shrink-0 text-center"><strong className="font-orbitron text-3xl font-black text-white"><CountUpValue value={standings[0].points}/></strong><div className="text-[10px] text-slate-300">نقطة</div></div>
@@ -91,7 +92,10 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
       </div>
 
       {/* Standings Responsive Table */}
-      <div className="overflow-x-auto">
+      <div className="space-y-2 sm:hidden" aria-label="ترتيب الفرق على الهاتف">
+        {standings.map((row,index)=><motion.div key={row.teamId} layout={reducedMotion?false:"position"} transition={{layout:{duration:.36}}} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 border border-white/10 bg-[#111b15] p-2" style={{borderInlineStart:`3px solid ${row.team.color}`}}><strong className="font-orbitron text-lime-200">{String(index+1).padStart(2,"0")}</strong><div className="flex min-w-0 items-center gap-2"><TeamCrest team={row.team} className="w-10 shrink-0"/><div className="min-w-0"><strong className="block break-words text-sm text-white">{row.team.name}</strong><p className="text-[10px] text-slate-300">{row.played} لعب · {row.won} فاز · {row.lost} خسر · الفارق {row.gd}</p></div></div><div className="text-center"><strong className="font-orbitron text-xl text-lime-200">{row.points}</strong><div className="text-[10px] text-slate-400">{rankChanges[row.teamId]>0?"↑ "+rankChanges[row.teamId]:rankChanges[row.teamId]<0?"↓ "+Math.abs(rankChanges[row.teamId]):"نقطة"}</div></div></motion.div>)}
+      </div>
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full min-w-[650px] border-separate border-spacing-y-1.5 text-right text-sm">
           <thead>
             <tr className="border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
