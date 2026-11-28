@@ -1,3 +1,4 @@
+import './TimerArena.css';
 import React, { useState, useEffect } from 'react';
 import {
   CategoryInfo,
@@ -165,9 +166,6 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
       sound.playPick('pick');
     }
     onSetCardStatus(selectedGameForModal.id, status);
-    if (status === 'current') {
-      onSetActiveGame(selectedGameForModal.id);
-    }
     setSelectedGameForModal(null);
   };
 
@@ -198,6 +196,7 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
   const handleSelectGameForSlot = (newGame: GameItem) => {
     if (!pickerTarget) return;
     const { catId, slotIndex } = pickerTarget;
+    if(Object.entries(columnGamesMap).some(([cat,ids])=>ids.some((id,i)=>id===newGame.id&&(cat!==catId||i!==slotIndex)))){setToastMessage('هذه اللعبة موجودة بخانة أخرى. اختر لعبة مختلفة.');setTimeout(()=>setToastMessage(null),3000);return;}
     const currentList = columnGamesMap[catId]
       ? [...columnGamesMap[catId]]
       : [...(DEFAULT_ARENA_COLUMN_GAMES[catId] || [])];
@@ -311,7 +310,7 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
       )}
 
       {/* 5 CATEGORY COLUMNS GRID */}
-      <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 my-auto max-w-7xl mx-auto w-full">
+      <div className="ce-control-grid relative z-10 my-auto mx-auto w-full">
         {arenaColumns.map((col) => {
           // Resolve 3 games for this column without forcing resets on custom user choices
           const rawKeys = columnGamesMap[col.catId];
@@ -367,131 +366,14 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
                   const isPickedA = cardState === 'picked_team_a';
                   const isPickedB = cardState === 'picked_team_b';
 
-                  return (
-                    <div
-                      key={`${col.catId}-${slotIdx}-${game.id}`}
-                      className="flex flex-col items-center group relative w-full max-w-[140px]"
-                    >
-                      {/* Rounded Hexagonal Card Container */}
-                      <div
-                        onClick={() => handleCardClick(game)}
-                        className={`w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-[24px] sm:rounded-[30px] flex items-center justify-center p-2.5 relative transition-all border-2 cursor-pointer duration-200 group-hover:scale-105 ${
-                          isPickedA
-                            ? 'bg-purple-600/90 border-purple-300 shadow-[0_0_35px_rgba(168,85,247,0.8)] ring-4 ring-purple-500'
-                            : isPickedB
-                            ? 'bg-cyan-500/90 border-cyan-200 shadow-[0_0_35px_rgba(6,182,212,0.8)] ring-4 ring-cyan-400'
-                            : isCurrent
-                            ? 'bg-amber-600/80 border-amber-300 shadow-[0_0_35px_rgba(251,191,36,0.8)] ring-4 ring-amber-400 animate-pulse'
-                            : isBannedA || isBannedB
-                            ? 'bg-[#0E0C22]/80 border-slate-700/80 opacity-70'
-                            : col.isCaptains
-                            ? 'bg-[#1C0A0E] border-rose-500/60 hover:border-rose-300 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-                            : col.isFanVote
-                            ? 'bg-[#180A1A] border-pink-500/60 hover:border-pink-300 shadow-[0_0_20px_rgba(236,72,153,0.3)]'
-                            : 'bg-[#0B0D24] border-indigo-500/50 hover:border-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.25)]'
-                        }`}
-                      >
-                        {/* Emblem Icon */}
-                        <div className="w-full h-full flex items-center justify-center">
-                          <GameIcon
-                            name={game.iconType}
-                            className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 drop-shadow-md text-white"
-                          />
-                        </div>
-
-                        {/* Floating Top-Right Rules Badge Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRulesModalTarget({
-                              game,
-                              category: categories.find((c) => c.id === game.categoryId),
-                            });
-                          }}
-                          className={`absolute -top-2.5 -right-2.5 z-20 w-7 h-7 rounded-full border shadow-lg transition-transform hover:scale-115 active:scale-90 flex items-center justify-center ${
-                            game.rules && game.rules.trim() !== ''
-                              ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.7)]'
-                              : 'bg-slate-900/95 text-slate-300 border-slate-700 hover:border-amber-400 hover:text-amber-300'
-                          }`}
-                          title={
-                            game.rules ? 'عرض وتعديل قوانين اللعبة' : 'إضافة قوانين وشروط اللعبة'
-                          }
-                        >
-                          <Scale className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Ban Cross Overlay */}
-                        {isBannedA && (
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <span className="text-5xl sm:text-6xl md:text-7xl font-black text-purple-400 drop-shadow-[0_0_12px_rgba(168,85,247,1)] select-none">
-                              ✕
-                            </span>
-                          </div>
-                        )}
-                        {isBannedB && (
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <span className="text-5xl sm:text-6xl md:text-7xl font-black text-cyan-400 drop-shadow-[0_0_12px_rgba(6,182,212,1)] select-none">
-                              ✕
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Game Label Below Card */}
-                      <div className="mt-2 flex flex-col items-center text-center max-w-[130px] px-1">
-                        <span className="text-xs sm:text-sm font-bold font-changa text-white tracking-wide drop-shadow group-hover:text-indigo-200 transition-colors line-clamp-1">
-                          {game.nameAr}
-                        </span>
-                        {game.nameEn && (
-                          <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider line-clamp-1">
-                            {game.nameEn}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Bottom Action Pills: Rules & Change Game */}
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRulesModalTarget({
-                              game,
-                              category: categories.find((c) => c.id === game.categoryId),
-                            });
-                          }}
-                          className={`text-[9px] font-changa font-bold px-2 py-0.5 rounded-full border transition-all flex items-center gap-1 shadow-sm active:scale-95 ${
-                            game.rules && game.rules.trim() !== ''
-                              ? 'bg-amber-950/80 hover:bg-amber-900 border-amber-500/80 text-amber-300'
-                              : 'bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
-                          }`}
-                          title="قوانين وشروط هذه اللعبة"
-                        >
-                          <Scale className="w-2.5 h-2.5" />
-                          <span>
-                            {game.rules && game.rules.trim() !== '' ? 'القوانين ✓' : '+ القوانين'}
-                          </span>
-                        </button>
-
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenLibraryPicker(col.catId, col.label, slotIdx, game.id);
-                          }}
-                          className={`text-[9px] font-changa font-bold px-2 py-0.5 rounded-full border transition-all flex items-center gap-1 shadow-sm active:scale-95 ${
-                            col.isCaptains
-                              ? 'bg-rose-950/70 hover:bg-rose-900 border-rose-600/70 text-rose-300 hover:text-white'
-                              : col.isFanVote
-                              ? 'bg-pink-950/70 hover:bg-pink-900 border-pink-600/70 text-pink-300 hover:text-white'
-                              : 'bg-slate-900/80 hover:bg-indigo-950 border-indigo-700/60 text-indigo-300 hover:text-white'
-                          }`}
-                          title={`تغيير اللعبة في خانة ${col.label} #${slotIdx + 1}`}
-                        >
-                          <Shuffle className="w-2.5 h-2.5" />
-                          <span>تغيير</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
+                  const actor=isBannedA||isPickedA?teamA:isBannedB||isPickedB?teamB:undefined;
+                  const banned=isBannedA||isBannedB,picked=isPickedA||isPickedB;
+                  const completed=cardState==='completed';
+                  const label=isCurrent?'الجارية الآن':banned?'حظر بواسطة '+actor?.name:picked?'اختارها '+actor?.name:completed?'انتهت':'متاحة';
+                  return <article key={`${col.catId}-${slotIdx}-${game.id}`} className={'ce-control-card '+(banned?'is-banned':'')} style={{'--card-accent':actor?.color|| (isCurrent?'#edcf80':col.headerColor)} as React.CSSProperties}>
+                    <button type="button" className="ce-control-art" onClick={()=>handleCardClick(game)}><div className="ce-control-icon"><GameIcon name={game.iconType} className="w-full h-full"/>{game.customImage&&<img src={game.customImage} alt="" onError={e=>{e.currentTarget.style.display='none'}}/>}</div><h3>{game.nameAr}</h3><span className="ce-control-state">{banned?'✕ ':picked?'✓ ':''}{label}</span></button>
+                    <div className="ce-control-tools"><button onClick={()=>setRulesModalTarget({game,category:categories.find(c=>c.id===game.categoryId)})}><Scale size={14}/> القوانين</button><button onClick={()=>handleOpenLibraryPicker(col.catId,col.label,slotIdx,game.id)}><Shuffle size={14}/> تغيير</button></div>
+                  </article>;
                 })}
               </div>
             </div>
@@ -585,43 +467,7 @@ export const ArenaBattleBoard: React.FC<ArenaBattleBoardProps> = ({
               حدد قرار الفريقين في هذه الجولة:
             </p>
 
-            <div className="grid grid-cols-2 gap-2.5 mb-3">
-              {/* Ban Team A */}
-              <button
-                onClick={() => handleAction('banned_team_a')}
-                className="p-3 rounded-xl border border-purple-700 bg-purple-950/60 hover:bg-purple-900/70 text-purple-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <span className="font-mono text-base font-black">✕</span>
-                <span>استبعاد ({teamA.shortName})</span>
-              </button>
-
-              {/* Ban Team B */}
-              <button
-                onClick={() => handleAction('banned_team_b')}
-                className="p-3 rounded-xl border border-cyan-700 bg-cyan-950/60 hover:bg-cyan-900/70 text-cyan-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <span className="font-mono text-base font-black">✕</span>
-                <span>استبعاد ({teamB.shortName})</span>
-              </button>
-
-              {/* Pick Team A */}
-              <button
-                onClick={() => handleAction('picked_team_a')}
-                className="p-3 rounded-xl border border-purple-500 bg-purple-600/40 hover:bg-purple-600/60 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <Check className="w-4 h-4 text-purple-200" />
-                <span>اختيار ({teamA.shortName})</span>
-              </button>
-
-              {/* Pick Team B */}
-              <button
-                onClick={() => handleAction('picked_team_b')}
-                className="p-3 rounded-xl border border-cyan-500 bg-cyan-600/40 hover:bg-cyan-600/60 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <Check className="w-4 h-4 text-cyan-200" />
-                <span>اختيار ({teamB.shortName})</span>
-              </button>
-            </div>
+            <div className="ce-decision-grid">{([teamA,teamB] as const).map((team,i)=><section key={team.id} style={{'--card-accent':team.color} as React.CSSProperties}><strong><GameIcon name={team.logo} className="w-9 h-9"/>{team.name}</strong><button onClick={()=>handleAction(i===0?'banned_team_a':'banned_team_b')}>✕ حظر بواسطة {team.shortName}</button><button onClick={()=>handleAction(i===0?'picked_team_a':'picked_team_b')}><Check size={16}/> اختيار بواسطة {team.shortName}</button></section>)}</div>
 
             {/* Set Current Playing Game */}
             <button

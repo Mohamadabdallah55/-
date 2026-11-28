@@ -15,5 +15,5 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run lint
-      - run: bun test tests/matchRules.test.mjs
+      - run: bun test tests
       - run: bun run build

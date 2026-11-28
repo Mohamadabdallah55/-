@@ -302,8 +302,9 @@ export const ArenaStageView: React.FC<ArenaStageViewProps> = ({
           <div className="grid grid-cols-5 gap-2 sm:gap-3">
             {[1, 2, 3, 4, 5].map((roundNum) => {
               const totalWon = currentMatch.teamAScore + currentMatch.teamBScore;
-              const isWonByA = roundNum <= currentMatch.teamAScore;
-              const isWonByB = roundNum > currentMatch.teamAScore && roundNum <= totalWon;
+              const savedRound=currentMatch.rounds?.find(r=>r.round===roundNum);
+              const isWonByA=savedRound?.winnerTeamId===currentMatch.teamAId;
+              const isWonByB=savedRound?.winnerTeamId===currentMatch.teamBId;
               const isCurrent = roundNum === totalWon + 1 && !isMatchDecided;
 
               const roundCategories: Record<number, { nameAr: string; icon: string; badgeClass: string }> = {

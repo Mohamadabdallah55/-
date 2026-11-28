@@ -54,6 +54,7 @@ import { ArenaStageView } from './components/ArenaStageView';
 import { VictoryModal } from './components/VictoryModal';
 import { CinematicIntro } from './components/CinematicIntro';
 import { applyRoundScore, isCertifiedFinal } from './utils/matchRules';
+import { swapCardSides, setArenaCard } from './utils/arenaRules';
 import { HotkeysModal } from './components/HotkeysModal';
 import { SpotlightCard } from './components/SpotlightCard';
 import { CountUpValue } from './components/CountUpValue';
@@ -480,7 +481,10 @@ export default function App() {
       if (newTeamId === nextMatch.teamAId) return;
       nextMatch.teamBId = newTeamId;
     }
-    if (nextMatch.teamAId !== currentMatch.teamAId || nextMatch.teamBId !== currentMatch.teamBId) delete nextMatch.stage;
+    if (nextMatch.teamAId !== currentMatch.teamAId || nextMatch.teamBId !== currentMatch.teamBId) {
+      delete nextMatch.stage;nextMatch.activeGameId=null;
+      setCardStates({});saveCardStates({});
+    }
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
@@ -494,6 +498,7 @@ export default function App() {
       teamAScore: currentMatch.teamBScore,
       teamBScore: currentMatch.teamAScore,
     };
+    const swappedCards=swapCardSides(cardStates);setCardStates(swappedCards);saveCardStates(swappedCards);
     setCurrentMatch(nextMatch);
     saveCurrentMatch(nextMatch);
   };
@@ -583,15 +588,8 @@ export default function App() {
     setCurrentMatch(resetMatch);
     saveCurrentMatch(resetMatch);
 
-    // Also reset active game states for next round
-    const nextCardStates = { ...cardStates };
-    Object.keys(nextCardStates).forEach((gId) => {
-      if (nextCardStates[gId].status === 'current') {
-        nextCardStates[gId] = { gameId: gId, status: 'completed' };
-      }
-    });
-    setCardStates(nextCardStates);
-    saveCardStates(nextCardStates);
+    // A new encounter starts without bans or picks from the previous teams.
+    setCardStates({});saveCardStates({});
   };
 
   // Reset current match
@@ -614,28 +612,29 @@ export default function App() {
     const resetCards: Record<string, { gameId: string; status: BanPickStatus }> = {};
     setCardStates(resetCards);
     saveCardStates(resetCards);
+    const nextMatch={...currentMatch,activeGameId:null};setCurrentMatch(nextMatch);saveCurrentMatch(nextMatch);
   };
 
-  // Set card status
+  // One shared update for all arena surfaces (desktop, mobile and audience).
   const handleSetCardStatus = (gameId: string, status: BanPickStatus) => {
     sound.playPick(status.startsWith('banned') ? 'ban' : 'pick');
-    const nextCards = {
-      ...cardStates,
-      [gameId]: { gameId, status },
-    };
-    setCardStates(nextCards);
-    saveCardStates(nextCards);
-  };
-
-  // Set active game for current match
-  const handleSetActiveGame = (gameId: string | null) => {
-    if (gameId) {
-      sound.playPick('pick');
-      sound.playRoundBell();
+    const nextCards=setArenaCard(cardStates,gameId,status);
+    setCardStates(nextCards);saveCardStates(nextCards);
+    if(status==='current'||currentMatch.activeGameId===gameId){
+      const nextMatch={...currentMatch,activeGameId:status==='current'?gameId:null};
+      setCurrentMatch(nextMatch);saveCurrentMatch(nextMatch);
     }
-    const nextMatch = { ...currentMatch, activeGameId: gameId };
-    setCurrentMatch(nextMatch);
-    saveCurrentMatch(nextMatch);
+  };
+  const handleSetActiveGame = (gameId: string | null) => {
+    if(gameId){
+      sound.playRoundBell();
+      const nextCards=setArenaCard(cardStates,gameId,'current');
+      setCardStates(nextCards);saveCardStates(nextCards);
+    }else if(currentMatch.activeGameId){
+      const nextCards=setArenaCard(cardStates,currentMatch.activeGameId,'available');
+      setCardStates(nextCards);saveCardStates(nextCards);
+    }
+    const nextMatch={...currentMatch,activeGameId:gameId};setCurrentMatch(nextMatch);saveCurrentMatch(nextMatch);
   };
 
   // Save customized teams
