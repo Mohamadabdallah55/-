@@ -3,6 +3,9 @@ import { CurrentMatch, Team, GameItem, LeagueRow, CategoryInfo, BanPickStatus } 
 import { DEFAULT_GAMES } from '../data/defaultGames';
 import { GameIcon } from './GameIcons';
 import { BrandMark } from './BrandMark';
+import { CinematicStage } from './CinematicStage';
+import { TeamCrest } from './TeamCrest';
+import { EliteTrophy } from './EliteTrophy';
 import { subscribeToBroadcast, DEFAULT_ARENA_COLUMN_GAMES } from '../utils/storage';
 import { revealWithGsap } from '../utils/gsapMotion';
 import {
@@ -69,6 +72,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
 
   const teamA = teams.find((t) => t.id === currentMatch.teamAId) || teams[0];
   const teamB = teams.find((t) => t.id === currentMatch.teamBId) || teams[1] || teams[0];
+  const isFinal = currentMatch.stage === 'final';
   const activeGame = games.find((g) => g.id === currentMatch.activeGameId);
   const activeCategory = activeGame ? categories.find((c) => c.id === activeGame.categoryId) : null;
 
@@ -204,70 +208,25 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
             </div>
           )}
 
-          {/* Big Match Score Bar */}
-          <div className="broadcast-match-card bg-[#070B19] rounded-3xl border-2 border-slate-700 shadow-[0_15px_50px_rgba(0,0,0,0.9)] p-4 md:p-6 flex items-center justify-between gap-6 relative">
-            {/* Team A */}
-            <div className="flex items-center gap-4 md:gap-6">
-              <div
-                className="w-20 h-20 md:w-32 md:h-32 rounded-3xl flex items-center justify-center text-4xl md:text-7xl font-black font-orbitron text-white shadow-2xl"
-                style={{
-                  backgroundColor: teamA?.color || '#A855F7',
-                  boxShadow: `0 0 30px ${teamA?.color || '#A855F7'}70`,
-                }}
-              >
-                {currentMatch.teamAScore}
-              </div>
-
-              <div className="text-right">
-                <h3 className="text-xl md:text-4xl font-black font-changa text-white uppercase tracking-wider">
-                  {teamA?.shortName || teamA?.name}
-                </h3>
-                <p className="text-xs md:text-sm text-purple-300 font-medium">{teamA?.name}</p>
-              </div>
+          <section className="relative isolate overflow-hidden border bg-[#080e0c] px-2 py-6 sm:px-8 sm:py-10" style={{borderColor:isFinal?'#d8b66b88':'#c5ed5a44'}}>
+            <div className="absolute inset-0 -z-10"><CinematicStage left={teamB?.color} right={teamA?.color} gold={isFinal}/></div>
+            <div className="mb-6 text-center"><p className="font-orbitron text-xs sm:text-lg font-black tracking-[.2em]" style={{color:isFinal?'#f5d58b':'#d3f189'}}>{isFinal?'THE GRAND FINAL':'CLASH OF ELITES'}</p><h2 className="mt-1 text-xl sm:text-4xl font-changa font-black">{isFinal?'المباراة النهائية':'مركز المواجهة'}</h2></div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-6" dir="rtl">
+              {([teamA,teamB] as const).map((team,i)=><React.Fragment key={i}>{i===1&&<div className="text-center">
+                {isFinal&&<EliteTrophy className="mx-auto mb-1 h-16 w-14 sm:h-28 sm:w-24"/>}
+                <div className="flex items-center justify-center gap-2 sm:gap-4 text-4xl sm:text-7xl md:text-8xl font-black font-orbitron tabular-nums" dir="rtl"><span>{currentMatch.teamAScore}</span><span className="text-slate-400">:</span><span>{currentMatch.teamBScore}</span></div>
+                <p className="mt-3 font-orbitron text-[10px] sm:text-xs text-amber-200">BEST OF 5</p>
+              </div>}<div className="min-w-0 flex flex-col items-center text-center"><TeamCrest team={team} className="w-[clamp(3.6rem,17vw,12rem)]"/><h3 className="mt-2 break-words max-w-full font-changa text-sm sm:text-3xl font-black">{team?.name||'—'}</h3></div></React.Fragment>)}
             </div>
-
-            {/* Center Emblem */}
-            <div className="flex flex-col items-center">
-              <div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 p-0.5 shadow-[0_0_35px_rgba(99,102,241,0.6)]">
-                <div className="w-full h-full bg-[#070B19] rounded-[14px] flex items-center justify-center">
-                  <GameIcon
-                    name={activeGame?.iconType || 'trophy'}
-                    className="w-8 h-8 md:w-12 md:h-12 text-cyan-300"
-                  />
-                </div>
-              </div>
-              <span className="mt-2 text-[10px] md:text-xs font-mono uppercase tracking-widest text-slate-400">
-                FIRST TO 3
-              </span>
-            </div>
-
-            {/* Team B */}
-            <div className="flex items-center gap-4 md:gap-6">
-              <div className="text-left">
-                <h3 className="text-xl md:text-4xl font-black font-changa text-white uppercase tracking-wider">
-                  {teamB?.shortName || teamB?.name}
-                </h3>
-                <p className="text-xs md:text-sm text-cyan-300 font-medium">{teamB?.name}</p>
-              </div>
-
-              <div
-                className="w-20 h-20 md:w-32 md:h-32 rounded-3xl flex items-center justify-center text-4xl md:text-7xl font-black font-orbitron text-white shadow-2xl"
-                style={{
-                  backgroundColor: teamB?.color || '#06B6D4',
-                  boxShadow: `0 0 30px ${teamB?.color || '#06B6D4'}70`,
-                }}
-              >
-                {currentMatch.teamBScore}
-              </div>
-            </div>
-          </div>
+          </section>
 
           {/* Best of 5 Rounds Track */}
           <div className="broadcast-round-track flex items-center justify-center gap-2 md:gap-3">
             {[1, 2, 3, 4, 5].map((roundNum) => {
               const totalRoundsPlayed = currentMatch.teamAScore + currentMatch.teamBScore;
-              const isWonByA = roundNum <= currentMatch.teamAScore;
-              const isWonByB = roundNum > currentMatch.teamAScore && roundNum <= totalRoundsPlayed;
+              const savedRound = currentMatch.rounds?.find(r=>r.round===roundNum);
+              const isWonByA = savedRound?.winnerTeamId===currentMatch.teamAId;
+              const isWonByB = savedRound?.winnerTeamId===currentMatch.teamBId;
               const isCurrent = roundNum === totalRoundsPlayed + 1 && currentMatch.teamAScore < 3 && currentMatch.teamBScore < 3;
 
               return (
@@ -283,7 +242,7 @@ export const BroadcastOverlay: React.FC<BroadcastOverlayProps> = ({
                       : 'bg-slate-900/90 text-slate-600 border border-slate-800'
                   }`}
                 >
-                  <span>الجولة {roundNum}</span>
+                  <span>الجولة {roundNum}{roundNum<=totalRoundsPlayed&&!isWonByA&&!isWonByB?' · محسومة':''}</span>
                 </div>
               );
             })}
