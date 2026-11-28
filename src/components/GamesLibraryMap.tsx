@@ -280,7 +280,7 @@ export const GamesLibraryMap: React.FC<GamesLibraryMapProps> = ({
                     }}
                     className="p-2.5 rounded-xl border border-purple-800 bg-purple-950/50 hover:bg-purple-900/60 text-purple-300 text-xs font-bold flex items-center justify-center gap-1.5"
                   >
-                    <span>✕ استبعاد ({teamA.shortName})</span>
+                    <span>✕ حظر بواسطة {teamA.shortName}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -290,7 +290,7 @@ export const GamesLibraryMap: React.FC<GamesLibraryMapProps> = ({
                     }}
                     className="p-2.5 rounded-xl border border-cyan-800 bg-cyan-950/50 hover:bg-cyan-900/60 text-cyan-300 text-xs font-bold flex items-center justify-center gap-1.5"
                   >
-                    <span>✕ استبعاد ({teamB.shortName})</span>
+                    <span>✕ حظر بواسطة {teamB.shortName}</span>
                   </button>
                   <button
                     onClick={() => {
