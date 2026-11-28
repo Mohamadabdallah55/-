@@ -46,7 +46,6 @@ import { DualTimer } from './components/DualTimer';
 import { TeamsModal } from './components/TeamsModal';
 import { MatchHistoryModal } from './components/MatchHistoryModal';
 import { BroadcastOverlay } from './components/BroadcastOverlay';
-import { isBroadcastView, type BroadcastView } from './components/FinalPresentation';
 import { GamesLibraryMap } from './components/GamesLibraryMap';
 import { ArenaBattleBoard } from './components/ArenaBattleBoard';
 import { MobileRemoteController } from './components/MobileRemoteController';
@@ -203,7 +202,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<
     'match' | 'arena' | 'library' | 'standings' | 'timer' | 'broadcast'
   >('match');
-  const [broadcastView, setBroadcastView] = useState<BroadcastView>('scoreboard');
+  const [broadcastView, setBroadcastView] = useState<'scoreboard' | 'games'>('scoreboard');
   const [remoteRulesGameId, setRemoteRulesGameId] = useState<string | null>(null);
 
   // Modals
@@ -222,7 +221,7 @@ export default function App() {
       if (type === 'GAMES_UPDATED') setGames(payload as GameItem[]);
       if (type === 'ARENA_GAMES_UPDATED') setArenaColumnGames(payload as Record<string, string[]>);
       if (type === 'LEAGUE_SETTINGS_UPDATED') setLeagueSettings(payload as LeagueSettings);
-      if (type === 'BROADCAST_VIEW_UPDATED' && isBroadcastView(payload)) {
+      if (type === 'BROADCAST_VIEW_UPDATED' && (payload === 'scoreboard' || payload === 'games')) {
         setBroadcastView(payload);
       }
       if (type === 'REMOTE_RULES_MODAL') {
