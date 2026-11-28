@@ -76,9 +76,9 @@
 .ce-game-art img{position:absolute;inset:0;margin:auto;max-width:96%;height:100%;background:#101a14}
 .ce-broadcast-canvas .ce-game-banned .ce-game-art{opacity:1;filter:none}
 .ce-game-banned .ce-game-icon,.ce-game-banned .ce-game-art img{opacity:.2;filter:grayscale(1)}
-.ce-game-art .ce-ban-mark,.ce-game-art .ce-pick-mark{position:absolute;inset:0;margin:auto;width:clamp(54px,8vw,145px);height:100%;max-height:125px;stroke-width:4.5;z-index:2;filter:drop-shadow(0 3px 2px #000) drop-shadow(0 0 10px #000)}
+.ce-game-art .ce-ban-mark{position:absolute;inset:0;margin:auto;width:clamp(54px,8vw,145px);height:100%;max-height:125px;stroke-width:4.5;z-index:2;filter:drop-shadow(0 3px 2px #000) drop-shadow(0 0 10px #000)}
 .ce-game-art .ce-ban-mark{color:#ff515e}
-.ce-game-art .ce-pick-mark{color:#a4ff98}
+
 .ce-broadcast-canvas .ce-game-banned{border:3px solid #ff515e;background:linear-gradient(140deg,#421b20,#171211)}
 .ce-broadcast-canvas .ce-game-banned h4{text-decoration:none;color:#fff}
 .ce-broadcast-canvas .ce-game-picked{border:3px solid var(--actor);background:linear-gradient(145deg,color-mix(in srgb,var(--actor) 32%,#101914),#101914)}
@@ -94,4 +94,10 @@
 @keyframes ce-score-pulse{0%,100%{transform:scale(1)}35%{transform:scale(1.09);filter:brightness(1.35)}}
 @media(prefers-reduced-motion:reduce){.ce-team-score-pulse .ce-live-crest{animation:none}}
 @media(min-width:1000px) and (min-height:600px){.ce-broadcast-canvas.ce-broadcast-games .ce-games-wall{flex:1 1 auto;min-height:0}.ce-broadcast-canvas.ce-broadcast-games .ce-games-grid{min-height:0}.ce-broadcast-canvas.ce-broadcast-games .ce-games-stack{min-height:0}.ce-broadcast-canvas.ce-broadcast-games .ce-game-tile{min-height:0;padding:5px;gap:3px}.ce-broadcast-canvas.ce-broadcast-games .ce-games-category{min-height:0;padding:6px 2px;margin-bottom:6px}.ce-broadcast-canvas.ce-broadcast-games .ce-game-art{max-height:clamp(48px,8vh,120px)}}
-@media(max-width:700px){.ce-broadcast-final .ce-live-cup{height:clamp(45px,12vh,100px)}.ce-broadcast-final .ce-live-digits{font-size:clamp(32px,10vw,70px)}.ce-game-art .ce-ban-mark,.ce-game-art .ce-pick-mark{width:65px}}
+@media(max-width:700px){.ce-broadcast-final .ce-live-cup{height:clamp(45px,12vh,100px)}.ce-broadcast-final .ce-live-digits{font-size:clamp(32px,10vw,70px)}.ce-game-art .ce-ban-mark{width:65px}}
+
+/* A selection is represented by the choosing team's color, not a check mark. */
+.ce-broadcast-canvas .ce-game-picked{border:clamp(4px,.48vw,9px) solid var(--actor);background:linear-gradient(150deg,color-mix(in srgb,var(--actor) 76%,#101914),color-mix(in srgb,var(--actor) 38%,#101914));box-shadow:inset 0 0 0 2px #ffffff30,0 0 18px color-mix(in srgb,var(--actor) 40%,transparent)}
+.ce-broadcast-canvas .ce-game-picked .ce-game-state>span:first-child{color:#fff;text-shadow:0 2px 4px #000}
+.ce-broadcast-canvas .ce-game-picked .ce-game-actor{background:#0b100de6;border:2px solid var(--actor);font-weight:900;color:white}
+.ce-broadcast-canvas .ce-game-picked h4{text-shadow:0 2px 5px #000}
